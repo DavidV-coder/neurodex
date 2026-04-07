@@ -119,6 +119,50 @@ class ConfigPanel {
     }).catch(() => {});
   }
 
+  async loadSkills() {
+    // Add skills section to config panel
+    const configPanel = document.getElementById('config-panel');
+    if (!configPanel) return;
+
+    let skillsSection = document.getElementById('skills-section');
+    if (!skillsSection) {
+      skillsSection = document.createElement('div');
+      skillsSection.id = 'skills-section';
+      skillsSection.className = 'config-section';
+      configPanel.appendChild(skillsSection);
+    }
+
+    try {
+      const skills = await gateway.call('skills.list');
+      const byCategory = {};
+      for (const s of skills) {
+        if (!byCategory[s.category]) byCategory[s.category] = [];
+        byCategory[s.category].push(s);
+      }
+
+      skillsSection.innerHTML = `<div class="config-title">SKILLS (/${Object.values(byCategory).flat().length})</div>`;
+
+      for (const [cat, catSkills] of Object.entries(byCategory)) {
+        const catEl = document.createElement('div');
+        catEl.style.cssText = 'margin-bottom:8px;';
+        catEl.innerHTML = `<div style="font-size:9px;letter-spacing:2px;color:var(--color-text-dim);margin:6px 0 3px;">${cat.toUpperCase()}</div>`;
+        for (const skill of catSkills) {
+          const btn = document.createElement('div');
+          btn.className = 'file-item';
+          btn.style.cssText = 'cursor:pointer;font-size:10px;';
+          btn.innerHTML = `<span style="color:var(--color-primary);min-width:80px;">/${skill.trigger}</span><span style="color:var(--color-text-dim);">${skill.description}</span>`;
+          btn.title = skill.description;
+          btn.addEventListener('click', () => {
+            document.getElementById('chat-input').value = `/${skill.trigger} `;
+            document.getElementById('chat-input').focus();
+          });
+          catEl.appendChild(btn);
+        }
+        skillsSection.appendChild(catEl);
+      }
+    } catch { /**/ }
+  }
+
   _initThemes() {
     if (!this.$themeSelector) return;
     const themes = [

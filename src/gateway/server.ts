@@ -13,6 +13,8 @@ import { executeTool, getToolDefinitions } from '../tools/index.js';
 import { permissionManager } from '../security/permissions.js';
 import { setApiKey, getApiKey, listProviders, deleteApiKey } from '../security/keyVault.js';
 import { MODELS } from '../models/index.js';
+import { mcpManager, McpManager } from '../mcp/client.js';
+import { skillsRegistry } from '../skills/registry.js';
 import type { Message, GenerateResult, StreamChunk, ModelProvider } from '../models/index.js';
 
 export interface GatewayConfig {
@@ -251,6 +253,66 @@ export class GatewayServer {
           (params.input ?? {}) as Record<string, unknown>
         );
         return result;
+      }
+
+      // ─── MCP ──────────────────────────────────────────────────────────────
+      case 'mcp.servers.list': {
+        return mcpManager.listServers();
+      }
+      case 'mcp.servers.add': {
+        mcpManager.addServer(params as unknown as import('../mcp/client.js').McpServerConfig);
+        return { ok: true };
+      }
+      case 'mcp.servers.remove': {
+        mcpManager.removeServer(String(params.id));
+        return { ok: true };
+      }
+      case 'mcp.servers.connect': {
+        await mcpManager.connect(String(params.id));
+        return { ok: true };
+      }
+      case 'mcp.servers.disconnect': {
+        mcpManager.disconnect(String(params.id));
+        return { ok: true };
+      }
+      case 'mcp.servers.connectAll': {
+        return mcpManager.connectAll();
+      }
+      case 'mcp.presets': {
+        return McpManager.PRESETS;
+      }
+
+      // ─── Skills ───────────────────────────────────────────────────────────
+      case 'skills.list': {
+        return skillsRegistry.listAll();
+      }
+      case 'skills.find': {
+        return skillsRegistry.find(String(params.trigger ?? ''));
+      }
+      case 'skills.categories': {
+        return skillsRegistry.getCategories();
+      }
+      case 'skills.run': {
+        const trigger = String(params.trigger ?? '');
+        const userInput = params.input ? String(params.input) : undefined;
+        const sessionId = String(params.sessionId ?? 'main');
+        const skill = skillsRegistry.find(trigger);
+        if (!skill) throw new Error(`Skill not found: ${trigger}`);
+
+        // Update session system prompt with skill prompt
+        const systemPrompt = skillsRegistry.buildSystemPrompt(skill, userInput);
+        sessionManager.updateConfig(sessionId, { systemPrompt });
+
+        // If input required and not provided, ask
+        if (skill.inputRequired && !userInput) {
+          return { needsInput: true, hint: skill.inputHint };
+        }
+
+        // Run as chat message
+        return this.handleChatSend(clientId, {
+          sessionId,
+          message: userInput ?? `Run skill: ${skill.name}`
+        });
       }
 
       default:

@@ -27,6 +27,7 @@ import { GlobTool } from './glob.js';
 import { GrepTool } from './grep.js';
 import { TodoTool } from './todo.js';
 import { WebFetchTool } from './webfetch.js';
+import { mcpManager } from '../mcp/client.js';
 
 export const ALL_TOOLS: Tool[] = [
   new BashTool(),
@@ -40,7 +41,9 @@ export const ALL_TOOLS: Tool[] = [
 ];
 
 export function getToolDefinitions(): ToolDefinition[] {
-  return ALL_TOOLS.map(t => t.definition);
+  const builtins = ALL_TOOLS.map(t => t.definition);
+  const mcpTools = mcpManager.getToolDefinitions();
+  return [...builtins, ...mcpTools];
 }
 
 export function getTool(name: string): Tool | undefined {
@@ -51,6 +54,16 @@ export async function executeTool(
   name: string,
   input: Record<string, unknown>
 ): Promise<ToolResult> {
+  // MCP tool?
+  if (name.startsWith('mcp__')) {
+    try {
+      const output = await mcpManager.executeTool(name, input);
+      return { success: true, output };
+    } catch (err) {
+      return { success: false, output: '', error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
   const tool = getTool(name);
   if (!tool) {
     return { success: false, output: '', error: `Unknown tool: ${name}` };

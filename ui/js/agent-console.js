@@ -87,8 +87,18 @@ class AgentConsole {
   }
 
   async _send() {
-    const text = this.$input.value.trim();
+    let text = this.$input.value.trim();
     if (!text || this.isStreaming) return;
+
+    // Handle slash commands → skills
+    if (text.startsWith('/')) {
+      const [trigger, ...rest] = text.slice(1).split(' ');
+      const input = rest.join(' ').trim() || undefined;
+      await this._runSkill(trigger, input);
+      this.$input.value = '';
+      this._resizeInput();
+      return;
+    }
 
     this.$input.value = '';
     this._resizeInput();
@@ -304,6 +314,33 @@ class AgentConsole {
       document.getElementById('tokens-in').textContent = session.totalInputTokens.toLocaleString();
       document.getElementById('tokens-out').textContent = session.totalOutputTokens.toLocaleString();
     } catch { /**/ }
+  }
+
+  async _runSkill(trigger, input) {
+    this._appendSystemMsg(`⚡ Running skill: /${trigger}${input ? ` ${input}` : ''}`);
+    this.isStreaming = true;
+    this.$btnSend.classList.add('loading');
+    this.$btnSend.textContent = '...';
+    this.streamingEl = this._appendAssistantMsg('');
+    this.streamingEl.querySelector('.msg-bubble').innerHTML = '<span class="streaming-cursor"></span>';
+    this._currentStreamText = '';
+
+    try {
+      const result = await gateway.call('skills.run', {
+        trigger, input, sessionId: this.sessionId
+      });
+      if (result?.needsInput) {
+        this._appendSystemMsg(`💬 ${result.hint || 'Please provide input for this skill'}`);
+        document.getElementById('chat-input').placeholder = result.hint || 'Enter input...';
+        this.pendingSkill = trigger;
+      }
+    } catch (err) {
+      this._appendError(err.message);
+    } finally {
+      this.isStreaming = false;
+      this.$btnSend.classList.remove('loading');
+      this.$btnSend.textContent = 'SEND';
+    }
   }
 
   setModel(provider, model, displayName) {

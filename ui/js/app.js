@@ -64,6 +64,7 @@
 
   window.configPanel = new ConfigPanel();
   await window.configPanel.load();
+  await window.configPanel.loadSkills();
 
   window.modelSelector = new ModelSelector();
   await window.modelSelector.loadModels();

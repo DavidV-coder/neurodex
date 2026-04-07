@@ -1,76 +1,110 @@
 /**
  * NeuroDEX — Electron Main Process
- * Manages the app window, Gateway lifecycle, and system integration.
  */
 
-import { app, BrowserWindow, ipcMain, Menu, Tray, nativeTheme } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, nativeTheme } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { GatewayServer } from '../src/gateway/server.js';
+import * as cp from 'child_process';
+
+// node-pty — native PTY support
+let pty: typeof import('node-pty') | null = null;
+try { pty = require('node-pty'); } catch { console.warn('[PTY] node-pty not available'); }
+
+const ptyProcesses = new Map<number, import('node-pty').IPty>();
+let ptyCounter = 0;
 
 const CONFIG_DIR = path.join(os.homedir(), '.config', 'NeuroDEX');
 const TOKEN_FILE = path.join(CONFIG_DIR, 'gateway.token');
 
 let mainWindow: BrowserWindow | null = null;
-let gateway: GatewayServer | null = null;
-let tray: Tray | null = null;
+let gatewayProcess: cp.ChildProcess | null = null;
+let gatewayToken: string | null = null;
 
-// Ensure config directory
-fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
+fs.mkdirSync(CONFIG_DIR, { recursive: true });
 
-async function startGateway(): Promise<string> {
-  gateway = new GatewayServer({ port: 18789, host: '127.0.0.1' });
-  gateway.setupPermissionBridge();
-  await gateway.start();
-
-  // Save token for CLI access
-  const token = gateway.getToken();
-  fs.writeFileSync(TOKEN_FILE, token, { mode: 0o600 });
-
-  return token;
+function generateToken(): string {
+  return require('crypto').randomBytes(32).toString('hex');
 }
 
-function createWindow(gatewayToken: string): void {
-  const isDev = process.env.NODE_ENV === 'development';
+function startGateway(): Promise<string> {
+  return new Promise((resolve) => {
+    const token = generateToken();
+    gatewayToken = token;
+    fs.writeFileSync(TOKEN_FILE, token, { mode: 0o600 });
 
+    const tsxBin = path.join(__dirname, '..', 'node_modules', '.bin', 'tsx');
+    const gatewayScript = path.join(__dirname, '..', 'src', 'gateway', 'start.ts');
+
+    gatewayProcess = cp.spawn(
+      tsxBin,
+      [gatewayScript],
+      {
+        env: {
+          ...process.env,
+          NEURODEX_GATEWAY_TOKEN: token,
+          NEURODEX_GATEWAY_PORT: '18789',
+          NEURODEX_GATEWAY_HOST: '127.0.0.1'
+        },
+        stdio: ['ignore', 'pipe', 'pipe']
+      }
+    );
+
+    if (gatewayProcess.stdout) {
+      gatewayProcess.stdout.on('data', (data: Buffer) => {
+        const msg = data.toString();
+        console.log('[Gateway]', msg.trim());
+        if (msg.includes('started on')) resolve(token);
+      });
+    }
+
+    if (gatewayProcess.stderr) {
+      gatewayProcess.stderr.on('data', (data: Buffer) => {
+        console.error('[Gateway]', data.toString().trim());
+      });
+    }
+
+    gatewayProcess.on('error', (err) => {
+      console.error('[Gateway] spawn error:', err);
+      resolve(token); // continue without gateway
+    });
+
+    // Max 4 second wait
+    setTimeout(() => resolve(token), 4000);
+  });
+}
+
+function createWindow(token: string): void {
   mainWindow = new BrowserWindow({
-    width: 1920,
-    height: 1080,
+    width: 1600,
+    height: 900,
     minWidth: 1280,
     minHeight: 720,
     fullscreen: false,
-    frame: false, // Frameless for sci-fi look
+    frame: false,
     transparent: false,
     backgroundColor: '#000a0f',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: true,
+      sandbox: false, // needed for preload to use ipcRenderer
       preload: path.join(__dirname, 'preload.js'),
-      webSecurity: true,
-      allowRunningInsecureContent: false
+      webSecurity: true
     },
-    icon: path.join(__dirname, '../ui/assets/icons/neurodex.png'),
     title: 'NeuroDEX'
   });
 
-  // Load UI
   mainWindow.loadFile(path.join(__dirname, '../ui/index.html'));
 
-  if (isDev) {
-    mainWindow.webContents.openDevTools({ mode: 'detach' });
-  }
-
-  // Pass gateway token to renderer via preload
   mainWindow.webContents.once('did-finish-load', () => {
     mainWindow?.webContents.send('gateway:token', {
-      token: gatewayToken,
+      token,
       port: 18789
     });
   });
 
-  // Window controls via IPC
+  // Window controls
   ipcMain.on('window:minimize', () => mainWindow?.minimize());
   ipcMain.on('window:maximize', () => {
     if (mainWindow?.isMaximized()) mainWindow.unmaximize();
@@ -81,17 +115,18 @@ function createWindow(gatewayToken: string): void {
     mainWindow?.setFullScreen(!mainWindow.isFullScreen());
   });
 
-  // Config access via IPC
   ipcMain.handle('config:read', async () => {
     try {
-      const configFile = path.join(CONFIG_DIR, 'settings.json');
-      return JSON.parse(fs.readFileSync(configFile, 'utf8'));
+      return JSON.parse(fs.readFileSync(path.join(CONFIG_DIR, 'settings.json'), 'utf8'));
     } catch { return {}; }
   });
 
-  ipcMain.handle('config:write', async (_, config: Record<string, unknown>) => {
-    const configFile = path.join(CONFIG_DIR, 'settings.json');
-    fs.writeFileSync(configFile, JSON.stringify(config, null, 2), { mode: 0o600 });
+  ipcMain.handle('config:write', async (_: unknown, config: Record<string, unknown>) => {
+    fs.writeFileSync(
+      path.join(CONFIG_DIR, 'settings.json'),
+      JSON.stringify(config, null, 2),
+      { mode: 0o600 }
+    );
     return { ok: true };
   });
 
@@ -99,49 +134,84 @@ function createWindow(gatewayToken: string): void {
     platform: process.platform,
     arch: process.arch,
     nodeVersion: process.version,
-    electronVersion: process.versions.electron,
     cwd: process.cwd(),
     home: os.homedir(),
     hostname: os.hostname()
   }));
 
-  mainWindow.on('closed', () => { mainWindow = null; });
+  // PTY IPC handlers
+  ipcMain.handle('pty:create', async (_, options: { cols: number; rows: number; cwd?: string }) => {
+    if (!pty) return { error: 'node-pty not available' };
+    const shell = process.platform === 'win32' ? 'powershell.exe'
+      : (process.env.SHELL ?? (process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash'));
+    const id = ++ptyCounter;
+    const ptyProcess = pty.spawn(shell, [], {
+      name: 'xterm-256color',
+      cols: options.cols ?? 80,
+      rows: options.rows ?? 24,
+      cwd: options.cwd ?? os.homedir(),
+      env: { ...process.env } as Record<string, string>
+    });
+    ptyProcesses.set(id, ptyProcess);
+    ptyProcess.onData((data: string) => {
+      mainWindow?.webContents.send(`pty:data:${id}`, data);
+    });
+    ptyProcess.onExit(() => {
+      ptyProcesses.delete(id);
+      mainWindow?.webContents.send(`pty:exit:${id}`);
+    });
+    return { id };
+  });
+
+  ipcMain.on('pty:write', (_, { id, data }: { id: number; data: string }) => {
+    ptyProcesses.get(id)?.write(data);
+  });
+
+  ipcMain.on('pty:resize', (_, { id, cols, rows }: { id: number; cols: number; rows: number }) => {
+    ptyProcesses.get(id)?.resize(cols, rows);
+  });
+
+  ipcMain.on('pty:kill', (_, { id }: { id: number }) => {
+    ptyProcesses.get(id)?.kill();
+    ptyProcesses.delete(id);
+  });
+
+  mainWindow.on('closed', () => {
+    // Kill all PTY processes
+    for (const [id, p] of ptyProcesses) { try { p.kill(); } catch { /**/ } ptyProcesses.delete(id); }
+    mainWindow = null;
+  });
 }
 
 app.whenReady().then(async () => {
-  // Force dark mode
   nativeTheme.themeSource = 'dark';
-
-  // Disable menu bar
   Menu.setApplicationMenu(null);
 
   try {
     const token = await startGateway();
     createWindow(token);
   } catch (err) {
-    console.error('[NeuroDEX] Failed to start Gateway:', err);
-    app.quit();
+    console.error('[NeuroDEX] Startup error:', err);
+    // Start without gateway — still show UI
+    createWindow(generateToken());
   }
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      startGateway().then(token => createWindow(token));
+    if (BrowserWindow.getAllWindows().length === 0 && gatewayToken) {
+      createWindow(gatewayToken);
     }
   });
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('before-quit', () => {
-  gateway?.stop();
+  gatewayProcess?.kill();
   try { fs.unlinkSync(TOKEN_FILE); } catch { /**/ }
 });
 
-// Security: prevent new window creation
 app.on('web-contents-created', (_, contents) => {
   contents.setWindowOpenHandler(() => ({ action: 'deny' }));
   contents.on('will-navigate', (event, url) => {
