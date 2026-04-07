@@ -1009,23 +1009,70 @@ html, body {
   color: var(--color-text-dim);
 }
 
-.boot-progress {
-  width: 300px;
-  height: 2px;
-  background: rgba(0, 229, 255, 0.1);
-  overflow: hidden;
+/* Diagnostic terminal window */
+.boot-terminal {
+  width: 480px;
+  max-height: 260px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(0, 229, 255, 0.15);
+  border-radius: 4px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.boot-progress-fill {
-  height: 100%;
-  background: var(--color-primary);
-  box-shadow: 0 0 10px var(--color-primary);
-  animation: boot-load 1.5s ease-in-out forwards;
+/* Individual diagnostic lines */
+.boot-line {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: var(--color-text-dim, #7a8a9a);
+  animation: boot-line-in 0.15s ease-out both;
 }
 
-@keyframes boot-load {
-  from { width: 0%; }
-  to { width: 100%; }
+@keyframes boot-line-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.boot-line-ok {
+  color: #00e57a;
+}
+
+.boot-line-fail {
+  color: #ff3355;
+}
+
+.boot-line-warn {
+  color: #ffb800;
+}
+
+/* Blocking action button */
+.boot-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.boot-settings-btn {
+  background: transparent;
+  border: 1px solid var(--color-primary, #00e5ff);
+  color: var(--color-primary, #00e5ff);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 8px 24px;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: background 0.2s, color 0.2s;
+}
+
+.boot-settings-btn:hover {
+  background: var(--color-primary, #00e5ff);
+  color: #000;
 }
 
 @keyframes boot-pulse {

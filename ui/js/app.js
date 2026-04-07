@@ -3,24 +3,177 @@
  */
 
 (async function() {
-  // Boot screen — show immediately
+  // ── Boot screen ────────────────────────────────────────────────────────────
+  const VERSION = '1.0.0';
+
   const bootScreen = document.createElement('div');
   bootScreen.className = 'boot-screen';
   bootScreen.innerHTML = `
     <div class="boot-logo">⬡</div>
     <div class="boot-text">NEURODEX</div>
-    <div class="boot-progress"><div class="boot-progress-fill"></div></div>
+    <div class="boot-terminal" id="boot-terminal"></div>
+    <div class="boot-actions hidden" id="boot-actions">
+      <button class="boot-settings-btn" id="boot-open-settings">⚙ Open Settings</button>
+    </div>
   `;
   document.body.appendChild(bootScreen);
 
-  // Remove boot screen after 1.5s regardless of anything else
-  setTimeout(() => {
+  const $terminal = document.getElementById('boot-terminal');
+  const $actions  = document.getElementById('boot-actions');
+
+  /** Append one terminal line with optional status badge */
+  function bootLine(text, status) {
+    const el = document.createElement('div');
+    el.className = 'boot-line' + (status ? ` boot-line-${status}` : '');
+    el.textContent = text;
+    $terminal.appendChild(el);
+    $terminal.scrollTop = $terminal.scrollHeight;
+    return el;
+  }
+
+  /** Small async delay helper */
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+
+  bootLine(`[INIT] NeuroDEX v${VERSION}`);
+  await wait(120);
+  bootLine('[SYS] Checking system...');
+  await wait(180);
+
+  // ── Step 1: get gateway token (max 3s wait) ──────────────────────────────
+  let gatewayToken = null;
+  let gatewayPort  = 18789;
+
+  if (window.NeuroDEX?.gateway) {
+    await Promise.race([
+      new Promise(resolve => {
+        window.NeuroDEX.gateway.onToken((data) => {
+          gatewayToken = data.token;
+          gatewayPort  = data.port;
+          resolve();
+        });
+      }),
+      new Promise(resolve => setTimeout(resolve, 3000))
+    ]);
+  }
+
+  // ── Step 2: connect to gateway ───────────────────────────────────────────
+  let gatewayOk = false;
+
+  const gwLine = bootLine('[GATEWAY] Connecting to local gateway...');
+  if (gatewayToken) {
+    try {
+      await Promise.race([
+        gateway.connect(gatewayPort, gatewayToken),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))
+      ]);
+      gatewayOk = true;
+      gwLine.textContent = '[GATEWAY] Connecting to local gateway... OK';
+      gwLine.classList.add('boot-line-ok');
+    } catch (err) {
+      gwLine.textContent = `[GATEWAY] Connecting to local gateway... FAILED (${err.message})`;
+      gwLine.classList.add('boot-line-fail');
+      console.warn('[NeuroDEX] Gateway not ready yet:', err.message);
+    }
+  } else {
+    gwLine.textContent = '[GATEWAY] Connecting to local gateway... FAILED (no token)';
+    gwLine.classList.add('boot-line-fail');
+  }
+  await wait(120);
+
+  // ── Step 3: check providers ───────────────────────────────────────────────
+  let cliAvailable   = false;
+  let cliVersion     = '';
+  let apiAvailable   = false;
+  let availableProviders = [];
+
+  if (gatewayOk) {
+    // CLI check
+    const cliLine = bootLine('[CLI] Detecting Claude Code CLI...');
+    try {
+      const cliInfo = await gateway.call('claudecode.available').catch(() => null);
+      if (cliInfo?.available) {
+        cliAvailable = true;
+        cliVersion   = cliInfo.version ? ` (v${cliInfo.version})` : '';
+        cliLine.textContent = `[CLI] Detecting Claude Code CLI... FOUND${cliVersion}`;
+        cliLine.classList.add('boot-line-ok');
+      } else {
+        cliLine.textContent = '[CLI] Detecting Claude Code CLI... NOT FOUND';
+        cliLine.classList.add('boot-line-warn');
+      }
+    } catch {
+      cliLine.textContent = '[CLI] Detecting Claude Code CLI... NOT FOUND';
+      cliLine.classList.add('boot-line-warn');
+    }
+    await wait(120);
+
+    // Provider/API check
+    const modLine = bootLine('[MODEL] Checking available providers...');
+    try {
+      availableProviders = await gateway.call('models.available').catch(() => []) || [];
+      if (availableProviders.length > 0) {
+        apiAvailable = true;
+        const preferred = availableProviders.includes('claude-code')
+          ? 'Claude Sonnet (Subscription)'
+          : availableProviders[0];
+        modLine.textContent = `[MODEL] Default: ${preferred}`;
+        modLine.classList.add('boot-line-ok');
+      } else {
+        modLine.textContent = '[MODEL] No providers configured';
+        modLine.classList.add('boot-line-warn');
+      }
+    } catch {
+      modLine.textContent = '[MODEL] Could not query providers';
+      modLine.classList.add('boot-line-warn');
+    }
+    await wait(120);
+  }
+
+  const anyProvider = cliAvailable || apiAvailable;
+
+  // ── Step 4: verdict ───────────────────────────────────────────────────────
+  if (!gatewayOk) {
+    bootLine('[ERROR] Gateway connection failed', 'fail');
+    await wait(80);
+    bootLine('[ERROR] No AI provider available', 'fail');
+    await wait(80);
+    bootLine('[ACTION] → Start the NeuroDEX backend service', 'warn');
+    await wait(80);
+    bootLine('[ACTION] → Or install Claude CLI: npm install -g @anthropic-ai/claude-code', 'warn');
+    await wait(80);
+    bootLine('[ACTION] → Or add an API key in Settings (Ctrl+,)', 'warn');
+    $actions.classList.remove('hidden');
+    // Block — don't dismiss, let user open settings
+    document.getElementById('boot-open-settings').addEventListener('click', () => {
+      dismissBoot();
+      setTimeout(() => window.settingsPanel?.show(), 50);
+    });
+  } else if (!anyProvider) {
+    bootLine('[WARN] No AI provider configured', 'warn');
+    await wait(80);
+    bootLine('[ACTION] → Install Claude CLI: npm install -g @anthropic-ai/claude-code', 'warn');
+    await wait(80);
+    bootLine('[ACTION] → Or add an API key in Settings (Ctrl+,)', 'warn');
+    $actions.classList.remove('hidden');
+    document.getElementById('boot-open-settings').addEventListener('click', () => {
+      dismissBoot();
+      setTimeout(() => window.settingsPanel?.show(), 50);
+    });
+    // Non-blocking — allow use after short delay
+    await wait(2000);
+    dismissBoot();
+  } else {
+    bootLine('[READY] All systems operational', 'ok');
+    await wait(600);
+    dismissBoot();
+  }
+
+  function dismissBoot() {
     bootScreen.style.transition = 'opacity 0.4s';
     bootScreen.style.opacity = '0';
     setTimeout(() => bootScreen.remove(), 400);
-  }, 1500);
+  }
 
-  // Window controls
+  // ── Step 5: window controls ───────────────────────────────────────────────
   document.getElementById('btn-minimize')?.addEventListener('click', () => window.NeuroDEX?.window.minimize());
   document.getElementById('btn-maximize')?.addEventListener('click', () => window.NeuroDEX?.window.maximize());
   document.getElementById('btn-close')?.addEventListener('click', () => window.NeuroDEX?.window.close());
@@ -65,37 +218,7 @@
     }
   });
 
-  // ── Step 1: get gateway token (max 3s wait) ──────────────────────────────
-  let gatewayToken = null;
-  let gatewayPort = 18789;
-
-  if (window.NeuroDEX?.gateway) {
-    await Promise.race([
-      new Promise(resolve => {
-        window.NeuroDEX.gateway.onToken((data) => {
-          gatewayToken = data.token;
-          gatewayPort = data.port;
-          resolve();
-        });
-      }),
-      new Promise(resolve => setTimeout(resolve, 3000))
-    ]);
-  }
-
-  // ── Step 2: connect to gateway (max 4s, non-fatal) ───────────────────────
-  if (gatewayToken) {
-    try {
-      await Promise.race([
-        gateway.connect(gatewayPort, gatewayToken),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))
-      ]);
-    } catch (err) {
-      console.warn('[NeuroDEX] Gateway not ready yet:', err.message);
-      // UI still works — gateway will reconnect in background
-    }
-  }
-
-  // ── Step 3: init subsystems — all non-blocking ───────────────────────────
+  // ── Step 6: init subsystems — all non-blocking ───────────────────────────
 
   // System monitor — pure JS, no gateway needed
   window.systemMonitor = new SystemMonitor();
@@ -122,7 +245,7 @@
   window.modelSelector = new ModelSelector();
   window.modelSelector.loadModels().catch(() => {});
 
-  // ── Step 4: UI events ────────────────────────────────────────────────────
+  // ── Step 7: UI events ────────────────────────────────────────────────────
   document.querySelectorAll('.panel-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.panel-tab-btn').forEach(b => b.classList.remove('active'));
