@@ -88,6 +88,7 @@ class AgentConsole {
   _listenGatewayEvents() {
     gateway.addEventListener('event', (e) => {
       const data = e.detail;
+      console.log('[Chat] event:', data.type);
       switch (data.type) {
         case 'chat.stream.chunk':
           if (data.sessionId === this.sessionId) this._handleChunk(data.chunk);
@@ -144,17 +145,37 @@ class AgentConsole {
     this.toolStreamItems.clear();
 
     // Update session model config
-    await gateway.call('sessions.config', {
-      id: this.sessionId,
-      config: { provider: this.currentModel.provider, model: this.currentModel.model }
-    }).catch(() => {});
-
+    console.log('[Chat] sending sessions.config', { id: this.sessionId, provider: this.currentModel.provider, model: this.currentModel.model });
     try {
-      await gateway.call('chat.send', {
+      await gateway.call('sessions.config', {
+        id: this.sessionId,
+        config: { provider: this.currentModel.provider, model: this.currentModel.model }
+      });
+      console.log('[Chat] sessions.config done');
+    } catch(e) { console.warn('[Chat] sessions.config failed:', e.message); }
+
+    console.log('[Chat] sending chat.send', { sessionId: this.sessionId, model: this.currentModel.model });
+    try {
+      const rpcResult = await gateway.call('chat.send', {
         sessionId: this.sessionId,
         message: text
       });
+      console.log('[Chat] chat.send rpcResult:', JSON.stringify(rpcResult)?.slice(0, 200));
+      // Fallback: if streaming events didn't arrive (Electron WS timing), use RPC response directly
+      if (this.streamingEl && !this._currentStreamText) {
+        const blocks = rpcResult?.result?.content || rpcResult?.content || [];
+        const fallbackText = blocks.find(b => b.type === 'text')?.text || '';
+        if (fallbackText) {
+          console.log('[Chat] using RPC fallback text:', fallbackText.slice(0, 50));
+          this._currentStreamText = fallbackText;
+          this._onStreamDone();
+        } else {
+          this.streamingEl?.remove();
+          this.streamingEl = null;
+        }
+      }
     } catch (err) {
+      console.log('[Chat] chat.send error:', err.message);
       // Show error inside the assistant bubble instead of leaving it blank
       if (this.streamingEl) {
         const bubble = this.streamingEl.querySelector('.msg-bubble');
@@ -189,6 +210,7 @@ class AgentConsole {
   }
 
   _handleChunk(chunk) {
+    console.log('[Chat] chunk:', chunk.type, chunk.text?.slice(0, 20));
     if (chunk.type === 'done') { this._onStreamDone(); return; }
     if (chunk.type === 'error') { this._appendError(chunk.error || 'Stream error'); this._onStreamDone(); return; }
     if (!this.streamingEl) return;
