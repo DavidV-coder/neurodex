@@ -24,47 +24,46 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "@google/generative-ai": "^0.21.0",
-    "openai": "^4.77.0",
+    "axios": "^1.7.9",
+    "better-sqlite3": "^11.6.0",
+    "chalk": "^5.3.0",
+    "chokidar": "^4.0.3",
+    "dotenv": "^16.4.7",
+    "electron-store": "^10.0.0",
+    "express": "^4.21.0",
+    "glob": "^10.5.0",
+    "highlight.js": "^11.11.0",
+    "howler": "^2.2.4",
+    "keytar": "^7.9.0",
+    "marked": "^15.0.4",
+    "micromatch": "^4.0.8",
+    "mime-types": "^2.1.35",
     "node-pty": "^1.0.0",
+    "openai": "^4.77.0",
+    "p-limit": "^6.2.0",
+    "smoothie": "^1.36.1",
+    "systeminformation": "^5.23.5",
+    "uuid": "^11.0.3",
+    "ws": "^8.18.0",
     "xterm": "^5.3.0",
     "xterm-addon-fit": "^0.8.0",
     "xterm-addon-web-links": "^0.8.0",
     "xterm-addon-webgl": "^0.17.0-beta.36",
-    "ws": "^8.18.0",
-    "express": "^4.21.0",
-    "systeminformation": "^5.23.5",
-    "keytar": "^7.9.0",
-    "glob": "^11.0.0",
-    "micromatch": "^4.0.8",
-    "marked": "^15.0.4",
-    "highlight.js": "^11.11.0",
-    "howler": "^2.2.4",
-    "smoothie": "^1.36.1",
-    "uuid": "^11.0.3",
-    "zod": "^3.24.1",
-    "dotenv": "^16.4.7",
-    "electron-store": "^10.0.0",
-    "chokidar": "^4.0.3",
-    "better-sqlite3": "^11.6.0",
-    "axios": "^1.7.9",
-    "chalk": "^5.3.0",
-    "execa": "^9.5.2",
-    "p-limit": "^6.2.0",
-    "mime-types": "^2.1.35"
+    "zod": "^3.24.1"
   },
   "devDependencies": {
-    "electron": "^33.4.0",
-    "electron-builder": "^25.1.8",
-    "typescript": "^5.7.2",
-    "tsx": "^4.19.2",
-    "concurrently": "^9.1.0",
-    "cross-env": "^7.0.3",
-    "eslint": "^9.17.0",
-    "vitest": "^2.1.8",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/marked": "^6.0.0",
     "@types/node": "^22.10.2",
     "@types/ws": "^8.5.13",
-    "@types/better-sqlite3": "^7.6.12",
-    "@types/marked": "^6.0.0"
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
+    "electron": "^33.4.0",
+    "electron-builder": "^25.1.8",
+    "eslint": "^9.17.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
   },
   "build": {
     "appId": "com.neurodex.app",
@@ -86,15 +85,38 @@
     "mac": {
       "category": "public.app-category.developer-tools",
       "icon": "ui/assets/icons/neurodex.icns",
-      "target": [{"target": "dmg", "arch": ["x64", "arm64"]}]
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
     },
     "linux": {
       "icon": "ui/assets/icons",
-      "target": [{"target": "AppImage", "arch": ["x64", "arm64"]}]
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
     },
     "win": {
       "icon": "ui/assets/icons/neurodex.ico",
-      "target": [{"target": "nsis", "arch": ["x64"]}]
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
     }
   }
 }

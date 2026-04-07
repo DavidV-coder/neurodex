@@ -8,6 +8,9 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as cp from 'child_process';
 
+// __dirname = dist/electron/ — root is two levels up
+const ROOT = path.join(__dirname, '..', '..');
+
 // node-pty — native PTY support
 let pty: typeof import('node-pty') | null = null;
 try { pty = require('node-pty'); } catch { console.warn('[PTY] node-pty not available'); }
@@ -34,8 +37,8 @@ function startGateway(): Promise<string> {
     gatewayToken = token;
     fs.writeFileSync(TOKEN_FILE, token, { mode: 0o600 });
 
-    const tsxBin = path.join(__dirname, '..', 'node_modules', '.bin', 'tsx');
-    const gatewayScript = path.join(__dirname, '..', 'src', 'gateway', 'start.ts');
+    const tsxBin = path.join(ROOT, 'node_modules', '.bin', 'tsx');
+    const gatewayScript = path.join(ROOT, 'src', 'gateway', 'start.ts');
 
     gatewayProcess = cp.spawn(
       tsxBin,
@@ -95,104 +98,70 @@ function createWindow(token: string): void {
     title: 'NeuroDEX'
   });
 
-  mainWindow.loadFile(path.join(__dirname, '../ui/index.html'));
+  mainWindow.loadFile(path.join(ROOT, 'ui', 'index.html'));
 
   mainWindow.webContents.once('did-finish-load', () => {
-    mainWindow?.webContents.send('gateway:token', {
-      token,
-      port: 18789
-    });
+    mainWindow?.webContents.send('gateway:token', { token, port: 18789 });
   });
 
-  // Window controls
+  mainWindow.on('closed', () => {
+    for (const [id, p] of ptyProcesses) { try { p.kill(); } catch { /**/ } ptyProcesses.delete(id); }
+    mainWindow = null;
+  });
+}
+
+function registerIpcHandlers(): void {
   ipcMain.on('window:minimize', () => mainWindow?.minimize());
   ipcMain.on('window:maximize', () => {
     if (mainWindow?.isMaximized()) mainWindow.unmaximize();
     else mainWindow?.maximize();
   });
   ipcMain.on('window:close', () => mainWindow?.close());
-  ipcMain.on('window:fullscreen', () => {
-    mainWindow?.setFullScreen(!mainWindow.isFullScreen());
-  });
+  ipcMain.on('window:fullscreen', () => mainWindow?.setFullScreen(!mainWindow.isFullScreen()));
 
   ipcMain.handle('config:read', async () => {
-    try {
-      return JSON.parse(fs.readFileSync(path.join(CONFIG_DIR, 'settings.json'), 'utf8'));
-    } catch { return {}; }
+    try { return JSON.parse(fs.readFileSync(path.join(CONFIG_DIR, 'settings.json'), 'utf8')); }
+    catch { return {}; }
   });
-
   ipcMain.handle('config:write', async (_: unknown, config: Record<string, unknown>) => {
-    fs.writeFileSync(
-      path.join(CONFIG_DIR, 'settings.json'),
-      JSON.stringify(config, null, 2),
-      { mode: 0o600 }
-    );
+    fs.writeFileSync(path.join(CONFIG_DIR, 'settings.json'), JSON.stringify(config, null, 2), { mode: 0o600 });
     return { ok: true };
   });
-
   ipcMain.handle('system:info', async () => ({
-    platform: process.platform,
-    arch: process.arch,
-    nodeVersion: process.version,
-    cwd: process.cwd(),
-    home: os.homedir(),
-    hostname: os.hostname()
+    platform: process.platform, arch: process.arch,
+    nodeVersion: process.version, cwd: process.cwd(),
+    home: os.homedir(), hostname: os.hostname()
   }));
 
-  // PTY IPC handlers
   ipcMain.handle('pty:create', async (_, options: { cols: number; rows: number; cwd?: string }) => {
     if (!pty) return { error: 'node-pty not available' };
     const shell = process.platform === 'win32' ? 'powershell.exe'
       : (process.env.SHELL ?? (process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash'));
     const id = ++ptyCounter;
     const ptyProcess = pty.spawn(shell, [], {
-      name: 'xterm-256color',
-      cols: options.cols ?? 80,
-      rows: options.rows ?? 24,
-      cwd: options.cwd ?? os.homedir(),
-      env: { ...process.env } as Record<string, string>
+      name: 'xterm-256color', cols: options.cols ?? 80, rows: options.rows ?? 24,
+      cwd: options.cwd ?? os.homedir(), env: { ...process.env } as Record<string, string>
     });
     ptyProcesses.set(id, ptyProcess);
-    ptyProcess.onData((data: string) => {
-      mainWindow?.webContents.send(`pty:data:${id}`, data);
-    });
-    ptyProcess.onExit(() => {
-      ptyProcesses.delete(id);
-      mainWindow?.webContents.send(`pty:exit:${id}`);
-    });
+    ptyProcess.onData((data: string) => mainWindow?.webContents.send(`pty:data:${id}`, data));
+    ptyProcess.onExit(() => { ptyProcesses.delete(id); mainWindow?.webContents.send(`pty:exit:${id}`); });
     return { id };
   });
-
-  ipcMain.on('pty:write', (_, { id, data }: { id: number; data: string }) => {
-    ptyProcesses.get(id)?.write(data);
-  });
-
-  ipcMain.on('pty:resize', (_, { id, cols, rows }: { id: number; cols: number; rows: number }) => {
-    ptyProcesses.get(id)?.resize(cols, rows);
-  });
-
-  ipcMain.on('pty:kill', (_, { id }: { id: number }) => {
-    ptyProcesses.get(id)?.kill();
-    ptyProcesses.delete(id);
-  });
-
-  mainWindow.on('closed', () => {
-    // Kill all PTY processes
-    for (const [id, p] of ptyProcesses) { try { p.kill(); } catch { /**/ } ptyProcesses.delete(id); }
-    mainWindow = null;
-  });
+  ipcMain.on('pty:write', (_, { id, data }: { id: number; data: string }) => ptyProcesses.get(id)?.write(data));
+  ipcMain.on('pty:resize', (_, { id, cols, rows }: { id: number; cols: number; rows: number }) => ptyProcesses.get(id)?.resize(cols, rows));
+  ipcMain.on('pty:kill', (_, { id }: { id: number }) => { ptyProcesses.get(id)?.kill(); ptyProcesses.delete(id); });
 }
 
 app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark';
   Menu.setApplicationMenu(null);
+  registerIpcHandlers();
 
   try {
     const token = await startGateway();
     createWindow(token);
   } catch (err) {
     console.error('[NeuroDEX] Startup error:', err);
-    // Start without gateway — still show UI
     createWindow(generateToken());
   }
 
