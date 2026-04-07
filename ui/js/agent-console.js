@@ -19,6 +19,31 @@ class AgentConsole {
 
     this._initEvents();
     this._listenGatewayEvents();
+    this._pickDefaultModel();
+  }
+
+  async _pickDefaultModel() {
+    // Wait briefly then auto-select best available model
+    await new Promise(r => setTimeout(r, 2500));
+    try {
+      const providers = await gateway.call('models.available').catch(() => null);
+      if (!providers) return;
+      // Prefer CLI subscription models (no API key needed)
+      if (providers.includes('claude-code')) {
+        this.setModel('claude-code', 'claude-code-sonnet', 'Claude Sonnet (Subscription)');
+        this._appendSystemMsg('Auto-selected: Claude Sonnet (Subscription) — using CLI, no API key needed.');
+        return;
+      }
+      // Fallback to first available API provider
+      const order = ['claude','openai','gemini','deepseek','mistral','ollama'];
+      const best = order.find(p => providers.includes(p));
+      if (best && best !== this.currentModel.provider) {
+        this._appendSystemMsg(`Tip: Configure an API key in Settings (Ctrl+,) or install Claude Code CLI for subscription access.`);
+      }
+      if (!best) {
+        this._appendSystemMsg('No model configured. Open Settings (Ctrl+,) → API KEYS, or install Claude Code CLI.');
+      }
+    } catch { /* silent */ }
   }
 
   _initEvents() {
@@ -130,7 +155,20 @@ class AgentConsole {
         message: text
       });
     } catch (err) {
-      this._appendError(err.message);
+      // Show error inside the assistant bubble instead of leaving it blank
+      if (this.streamingEl) {
+        const bubble = this.streamingEl.querySelector('.msg-bubble');
+        const cursor = bubble.querySelector('.streaming-cursor');
+        if (cursor) cursor.remove();
+        let msg = err.message;
+        if (msg.includes('API key not configured') || msg.includes('not configured')) {
+          msg = `${msg}\n\n→ Open Settings (Ctrl+,) → API KEYS tab\n   or select a Subscription model: Ctrl+K → Claude Opus/Sonnet/Haiku (Subscription)`;
+        }
+        bubble.innerHTML = `<span style="color:var(--color-error,#ff3355)">${this._escapeHtml(msg)}</span>`;
+        this.streamingEl = null;
+      } else {
+        this._appendError(err.message);
+      }
     } finally {
       this.isStreaming = false;
       this.$btnSend.classList.remove('loading');
