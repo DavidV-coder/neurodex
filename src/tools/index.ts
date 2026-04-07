@@ -30,6 +30,7 @@ import { WebFetchTool } from './webfetch.js';
 import { mcpManager } from '../mcp/client.js';
 import { hooksManager } from '../hooks/manager.js';
 import { executeBrowserAction, getBrowserToolDefinition } from './browser.js';
+import { runMoleCommand, getMoleToolDefinition, isMoleAvailable } from './mole.js';
 
 // Browser tool wrapper
 const browserTool: Tool = {
@@ -38,6 +39,23 @@ const browserTool: Tool = {
     const result = await executeBrowserAction(input as unknown as Parameters<typeof executeBrowserAction>[0]);
     if (!result.success) return { success: false, output: '', error: result.error };
     return { success: true, output: result.output || (result.screenshot ? '[screenshot captured]' : '') };
+  }
+};
+
+// Mole system tool wrapper
+const moleTool: Tool = {
+  definition: getMoleToolDefinition() as unknown as ToolDefinition,
+  execute: async (input) => {
+    if (input.command === 'info') {
+      const { getMoleSystemInfo } = await import('./mole.js');
+      const info = await getMoleSystemInfo();
+      return { success: true, output: JSON.stringify(info, null, 2) };
+    }
+    const result = await runMoleCommand({
+      command: input.command as Parameters<typeof runMoleCommand>[0]['command'],
+      dryRun: input.dryRun as boolean | undefined
+    });
+    return { success: result.success, output: result.output, error: result.success ? undefined : result.output };
   }
 };
 
@@ -50,7 +68,8 @@ export const ALL_TOOLS: Tool[] = [
   new GrepTool(),
   new TodoTool(),
   new WebFetchTool(),
-  browserTool
+  browserTool,
+  ...(isMoleAvailable() ? [moleTool] : [])
 ];
 
 export function getToolDefinitions(): ToolDefinition[] {

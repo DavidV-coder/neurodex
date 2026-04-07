@@ -1292,3 +1292,45 @@ html, body {
 
 /* Danger color variable fallback */
 :root { --color-danger: #ff3355; --color-warn: #ffb000; }
+
+/* ── Mole panel ─────────────────────────────────────────── */
+.mole-status-badge {
+  float: right; font-size: 8px; letter-spacing: 1px;
+  padding: 1px 5px; border-radius: 2px;
+}
+.mole-status-badge.ok  { color: var(--color-success, #00ff88); border: 1px solid rgba(0,255,136,0.3); }
+.mole-status-badge.off { color: var(--color-text-dim); border: 1px solid rgba(255,255,255,0.1); }
+.mole-btn-row {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 4px; margin-top: 4px;
+}
+.mole-btn {
+  background: rgba(0,229,255,0.05);
+  border: 1px solid rgba(0,229,255,0.2);
+  color: var(--color-text-dim);
+  font-family: inherit; font-size: 8px; letter-spacing: 1px;
+  padding: 4px 0; cursor: pointer; transition: all 0.15s;
+}
+.mole-btn:hover { background: rgba(0,229,255,0.15); color: var(--color-primary); border-color: var(--color-primary); }
+.mole-btn.mole-btn-warn { border-color: rgba(255,176,0,0.3); color: rgba(255,176,0,0.7); }
+.mole-btn.mole-btn-warn:hover { background: rgba(255,176,0,0.1); color: var(--color-warn); border-color: var(--color-warn); }
+.mole-output {
+  margin-top: 6px; padding: 6px;
+  background: rgba(0,0,0,0.4); border: 1px solid rgba(0,229,255,0.1);
+  font-size: 8px; color: var(--color-text-dim);
+  max-height: 80px; overflow-y: auto;
+  white-space: pre-wrap; word-break: break-all;
+  line-height: 1.5;
+}
+
+/* ── Process list ───────────────────────────────────────── */
+.proc-row {
+  display: grid; grid-template-columns: 40px 40px 40px 1fr;
+  gap: 4px; padding: 2px 4px;
+  font-size: 9px; border-bottom: 1px solid rgba(0,229,255,0.04);
+}
+.proc-row:hover { background: rgba(0,229,255,0.04); }
+.proc-cpu.hi { color: var(--color-warn); }
+.proc-pid  { color: rgba(0,229,255,0.4); }
+.proc-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#proc-count { font-size: 9px; color: var(--color-text-dim); margin-left: 6px; }

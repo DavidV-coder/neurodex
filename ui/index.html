@@ -39,9 +39,9 @@
 
       <!-- CPU -->
       <div class="sysinfo-block" id="cpu-block">
-        <div class="sysinfo-label">CPU</div>
-        <div id="cpu-model" class="sysinfo-value">Loading...</div>
-        <canvas id="cpu-chart" width="220" height="50"></canvas>
+        <div class="sysinfo-label">CPU <span id="cpu-pct" style="float:right;color:var(--color-accent)">--</span></div>
+        <div id="cpu-model" class="sysinfo-value" style="font-size:8px;opacity:0.6">Loading...</div>
+        <canvas id="cpu-chart" width="220" height="40"></canvas>
         <div id="cpu-cores" class="cores-grid"></div>
       </div>
 
@@ -54,11 +54,41 @@
         <div id="ram-info" class="sysinfo-value">-- / --</div>
       </div>
 
+      <!-- Disk -->
+      <div class="sysinfo-block" id="disk-block">
+        <div class="sysinfo-label">DISK</div>
+        <div id="disk-bar" class="progress-bar">
+          <div id="disk-used" class="progress-fill" style="background:var(--color-warn-dim,rgba(255,200,0,0.4))"></div>
+        </div>
+        <div id="disk-info" class="sysinfo-value">-- / --</div>
+      </div>
+
       <!-- Network -->
       <div class="sysinfo-block" id="net-block">
         <div class="sysinfo-label">NETWORK</div>
-        <div id="net-rx" class="sysinfo-value net-stat">↓ --</div>
-        <div id="net-tx" class="sysinfo-value net-stat">↑ --</div>
+        <div style="display:flex;gap:8px;">
+          <div id="net-rx" class="sysinfo-value net-stat" style="flex:1">↓ --</div>
+          <div id="net-tx" class="sysinfo-value net-stat" style="flex:1">↑ --</div>
+        </div>
+      </div>
+
+      <!-- Mole System Health -->
+      <div class="sysinfo-block" id="mole-block">
+        <div class="sysinfo-label">
+          HEALTH
+          <span id="mole-status" class="mole-status-badge off">CHECKING</span>
+        </div>
+        <div style="display:flex;gap:4px;font-size:8px;opacity:0.6;margin-bottom:4px;">
+          <span id="mole-version"></span>
+          <span id="mole-disk-free"></span>
+        </div>
+        <div class="mole-btn-row">
+          <button class="mole-btn" id="mole-btn-analyze" title="Analyze disk usage">ANALYZE</button>
+          <button class="mole-btn" id="mole-btn-clean"   title="Clean caches (dry-run preview)">CLEAN</button>
+          <button class="mole-btn" id="mole-btn-optimize" title="Optimize system (dry-run preview)">OPTIMIZE</button>
+          <button class="mole-btn mole-btn-warn" id="mole-btn-purge"   title="Purge old artifacts">PURGE</button>
+        </div>
+        <div id="mole-output" class="mole-output hidden"></div>
       </div>
 
       <!-- AI Status -->
@@ -72,10 +102,11 @@
         </div>
       </div>
 
-      <!-- Clock -->
+      <!-- Clock + Uptime -->
       <div id="clock-block">
         <div id="clock-time">00:00:00</div>
         <div id="clock-date">----/--/--</div>
+        <div id="sys-uptime" style="font-size:8px;opacity:0.5;margin-top:2px;letter-spacing:1px"></div>
       </div>
     </div>
 
@@ -137,7 +168,7 @@
       <!-- Process Monitor -->
       <div id="processes-panel" class="right-subpanel hidden">
         <div class="proc-header">
-          <span>PID</span><span>CPU%</span><span>MEM%</span><span>NAME</span>
+          <span>PID</span><span>CPU%</span><span>MEM%</span><span>NAME <span id="proc-count" style="float:right"></span></span>
         </div>
         <div id="proc-list"></div>
       </div>
@@ -249,7 +280,27 @@
 
       <!-- CLI tab -->
       <div class="stab-content hidden" id="stab-cli">
-        <div class="stab-section-title">CLI INSTALLATION</div>
+        <div class="stab-section-title">CLAUDE CODE CLI (SUBSCRIPTION)</div>
+        <div id="claudecode-status" class="settings-cli-status" style="margin-bottom:10px">Checking...</div>
+        <div class="stab-hint" style="margin-bottom:12px">Use your Claude.ai subscription — no API key required. Install Claude Code CLI to enable claude-code-opus/sonnet/haiku models.</div>
+        <div class="settings-cli-commands" style="margin-bottom:16px">
+          <div class="cli-cmd-row">
+            <span class="cli-cmd-label">Install Claude Code:</span>
+            <code class="cli-cmd-code" id="cli-cc-install">npm install -g @anthropic-ai/claude-code</code>
+            <button class="cli-cmd-copy" data-copy="cli-cc-install">COPY</button>
+          </div>
+          <div class="cli-cmd-row">
+            <span class="cli-cmd-label">Login:</span>
+            <code class="cli-cmd-code" id="cli-cc-login">claude login</code>
+            <button class="cli-cmd-copy" data-copy="cli-cc-login">COPY</button>
+          </div>
+          <div class="cli-cmd-row">
+            <span class="cli-cmd-label">Verify:</span>
+            <code class="cli-cmd-code" id="cli-cc-verify">claude --version</code>
+            <button class="cli-cmd-copy" data-copy="cli-cc-verify">COPY</button>
+          </div>
+        </div>
+        <div class="stab-section-title">NEURODEX CLI INSTALLATION</div>
         <div class="stab-hint">Run NeuroDEX from any terminal.</div>
         <div id="settings-cli-status" class="settings-cli-status">Checking...</div>
         <div class="settings-cli-commands">

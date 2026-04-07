@@ -10,6 +10,7 @@ import { OpenAIAdapter } from './openai.js';
 import { GeminiAdapter } from './gemini.js';
 import { DeepSeekAdapter } from './deepseek.js';
 import { OllamaAdapter } from './ollama.js';
+import { ClaudeCodeAdapter, isClaudeCliAvailable, detectClaudeCliInfo } from './claudeCode.js';
 
 const adapterCache: Map<string, ModelAdapter> = new Map();
 
@@ -61,6 +62,13 @@ export async function getAdapter(
       adapter = new OllamaAdapter(model, baseUrl);
       break;
     }
+    case 'claude-code': {
+      if (!isClaudeCliAvailable()) {
+        throw new Error('Claude Code CLI not found. Install from: https://claude.ai/code');
+      }
+      adapter = new ClaudeCodeAdapter();
+      break;
+    }
     default:
       throw new Error(`Unknown provider: ${provider}`);
   }
@@ -92,5 +100,10 @@ export async function getAvailableProviders(): Promise<ModelProvider[]> {
   const ollama = new OllamaAdapter();
   if (await ollama.isAvailable()) providers.push('ollama');
 
+  // Check Claude Code CLI (subscription, no API key)
+  if (isClaudeCliAvailable()) providers.push('claude-code' as ModelProvider);
+
   return providers;
 }
+
+export { detectClaudeCliInfo, isClaudeCliAvailable };

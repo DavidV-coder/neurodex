@@ -325,6 +325,24 @@ class SettingsPanel {
   }
 
   async _loadCli() {
+    // Claude Code CLI detection
+    const $ccStatus = document.getElementById('claudecode-status');
+    if ($ccStatus && gateway.connected) {
+      try {
+        const info = await gateway.call('claudecode.detect').catch(() => null);
+        if (info?.available) {
+          $ccStatus.innerHTML = `<span class="key-ok">● CLAUDE CODE CLI DETECTED</span>
+            <span style="margin-left:10px;font-size:10px;color:var(--color-text-dim)">${info.binary || ''} ${info.version ? '— ' + info.version : ''}</span>
+            <div style="margin-top:4px;font-size:10px;color:var(--color-success,#00ff88)">✓ Subscription models available (no API key needed)</div>`;
+        } else {
+          $ccStatus.innerHTML = `<span class="key-missing">○ CLAUDE CODE CLI NOT FOUND</span>
+            <div style="margin-top:4px;font-size:10px;color:var(--color-text-dim)">Install below to use subscription-based models</div>`;
+        }
+      } catch {
+        $ccStatus.innerHTML = '<span class="key-missing">○ Not checked (gateway offline)</span>';
+      }
+    }
+
     const $status = document.getElementById('settings-cli-status');
     const $gateway = document.getElementById('settings-gateway-info');
     if ($status) {

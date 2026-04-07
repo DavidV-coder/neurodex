@@ -3,7 +3,7 @@
  * Unified interface for Claude, OpenAI, Gemini, DeepSeek, Mistral, Ollama
  */
 
-export type ModelProvider = 'claude' | 'openai' | 'gemini' | 'deepseek' | 'mistral' | 'ollama';
+export type ModelProvider = 'claude' | 'openai' | 'gemini' | 'deepseek' | 'mistral' | 'ollama' | 'claude-code';
 
 export interface ModelConfig {
   provider: ModelProvider;
@@ -99,6 +99,11 @@ export const MODELS: ModelConfig[] = [
   { provider: 'mistral', model: 'codestral-latest', displayName: 'Codestral', maxTokens: 8192, supportsTools: true, supportsVision: false, supportsThinking: false, contextWindow: 256000 },
   // Ollama (local)
   { provider: 'ollama', model: 'llama3.3', displayName: 'Llama 3.3 (Local)', maxTokens: 4096, supportsTools: true, supportsVision: false, supportsThinking: false, contextWindow: 128000 },
+
+  // Claude Code (CLI subscription — no API key needed)
+  { provider: 'claude-code', model: 'claude-code-opus',   displayName: 'Claude Opus (Subscription)', maxTokens: 32000, supportsTools: false, supportsVision: false, supportsThinking: true,  contextWindow: 200000 },
+  { provider: 'claude-code', model: 'claude-code-sonnet', displayName: 'Claude Sonnet (Subscription)', maxTokens: 16000, supportsTools: false, supportsVision: false, supportsThinking: false, contextWindow: 200000 },
+  { provider: 'claude-code', model: 'claude-code-haiku',  displayName: 'Claude Haiku (Subscription)', maxTokens: 8000,  supportsTools: false, supportsVision: false, supportsThinking: false, contextWindow: 200000 },
   { provider: 'ollama', model: 'qwen2.5-coder', displayName: 'Qwen 2.5 Coder (Local)', maxTokens: 8192, supportsTools: true, supportsVision: false, supportsThinking: false, contextWindow: 128000 },
 ];
 

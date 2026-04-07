@@ -24,6 +24,7 @@
     "build:cli": "tsc -p tsconfig.cli.json"
   },
   "dependencies": {
+    "@anthropic-ai/claude-code": "^2.1.92",
     "@anthropic-ai/sdk": "^0.39.0",
     "@google/generative-ai": "^0.21.0",
     "@types/node-cron": "^3.0.11",

@@ -21,6 +21,9 @@ import { agentPool } from '../agents/agentPool.js';
 import { cronScheduler } from '../scheduler/cron.js';
 import { telegramClient } from '../integrations/telegram/client.js';
 import { resolveContextRefs, autocompleteRef } from '../context/resolver.js';
+import { systemPoller } from '../telemetry/systemPoller.js';
+import { getMoleSystemInfo, runMoleCommand, isMoleAvailable } from '../tools/mole.js';
+import { detectClaudeCliInfo, isClaudeCliAvailable } from '../models/registry.js';
 import { loadClaudeMd, findClaudeMdPath } from '../context/claudemd.js';
 import { exportToMarkdown, exportToJSON, getExportFilename } from '../sessions/exporter.js';
 import { calculateCost, formatCost, formatTokenCount, getPricing } from '../telemetry/costs.js';
@@ -110,6 +113,9 @@ export class GatewayServer {
 
       this.httpServer.listen(this.config.port, this.config.host, () => {
         console.log(`[Gateway] NeuroDEX Gateway started on ${this.config.host}:${this.config.port}`);
+        // Start system poller and broadcast metrics to all clients
+        systemPoller.start();
+        systemPoller.on('metrics', (m) => this.broadcastEvent({ type: 'system.metrics', data: m }));
         resolve();
       });
 
@@ -507,6 +513,29 @@ export class GatewayServer {
         const cwd = String(params.cwd ?? process.cwd());
         return new ProjectMemory(cwd).stats();
       }
+
+      // ─── System / Mole ────────────────────────────────────────────────────
+      case 'system.snapshot':    return systemPoller.getLatest();
+      case 'system.setInterval': systemPoller.setInterval(Number(params.ms ?? 2000)); return { ok: true };
+
+      case 'mole.info':    return getMoleSystemInfo();
+      case 'mole.available': return { available: isMoleAvailable() };
+      case 'mole.run': {
+        const chunks: string[] = [];
+        const result = await runMoleCommand({
+          command: String(params.command) as Parameters<typeof runMoleCommand>[0]['command'],
+          dryRun: Boolean(params.dryRun ?? true),
+          onLine: (line) => {
+            chunks.push(line);
+            this.broadcastEvent({ type: 'mole.output', line });
+          }
+        });
+        return { ...result, output: chunks.join('') };
+      }
+
+      // ─── Claude Code CLI ─────────────────────────────────────────────────
+      case 'claudecode.detect': return detectClaudeCliInfo();
+      case 'claudecode.available': return { available: isClaudeCliAvailable() };
 
       default:
         throw new Error(`Method not found: ${request.method}`);
