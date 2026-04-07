@@ -15,6 +15,17 @@ import { setApiKey, getApiKey, listProviders, deleteApiKey } from '../security/k
 import { MODELS } from '../models/index.js';
 import { mcpManager, McpManager } from '../mcp/client.js';
 import { skillsRegistry } from '../skills/registry.js';
+import { hooksManager } from '../hooks/manager.js';
+import { profileManager } from '../profiles/manager.js';
+import { agentPool } from '../agents/agentPool.js';
+import { cronScheduler } from '../scheduler/cron.js';
+import { telegramClient } from '../integrations/telegram/client.js';
+import { resolveContextRefs, autocompleteRef } from '../context/resolver.js';
+import { loadClaudeMd, findClaudeMdPath } from '../context/claudemd.js';
+import { exportToMarkdown, exportToJSON, getExportFilename } from '../sessions/exporter.js';
+import { calculateCost, formatCost, formatTokenCount, getPricing } from '../telemetry/costs.js';
+import * as vectorStore from '../memory/vectorStore.js';
+import { ProjectMemory } from '../memory/projectMemory.js';
 import type { Message, GenerateResult, StreamChunk, ModelProvider } from '../models/index.js';
 
 export interface GatewayConfig {
@@ -359,8 +370,162 @@ export class GatewayServer {
         });
       }
 
+      // ─── Hooks ────────────────────────────────────────────────────────────
+      case 'hooks.list':   return hooksManager.list();
+      case 'hooks.add':    return hooksManager.add(params as Parameters<typeof hooksManager.add>[0]);
+      case 'hooks.remove': return { ok: hooksManager.remove(String(params.id)) };
+      case 'hooks.update': return { ok: hooksManager.update(String(params.id), params as Parameters<typeof hooksManager.update>[1]) };
+      case 'hooks.test': {
+        const results = await hooksManager.run(params.event as Parameters<typeof hooksManager.run>[0], (params.context ?? {}) as Parameters<typeof hooksManager.run>[1]);
+        return results;
+      }
+
+      // ─── Profiles ─────────────────────────────────────────────────────────
+      case 'profiles.list':     return profileManager.list();
+      case 'profiles.get':      return profileManager.get(String(params.id));
+      case 'profiles.active':   return profileManager.getActive();
+      case 'profiles.create':   return profileManager.create(params as Parameters<typeof profileManager.create>[0]);
+      case 'profiles.update':   return { ok: profileManager.update(String(params.id), params as Parameters<typeof profileManager.update>[1]) };
+      case 'profiles.delete':   return { ok: profileManager.delete(String(params.id)) };
+      case 'profiles.activate': return profileManager.activate(String(params.id));
+
+      // ─── Background Agents ────────────────────────────────────────────────
+      case 'agents.spawn': {
+        const agent = agentPool.spawn({
+          task: String(params.task),
+          provider: params.provider ? String(params.provider) : undefined,
+          model: params.model ? String(params.model) : undefined,
+          maxIterations: params.maxIterations ? Number(params.maxIterations) : undefined,
+          label: params.label ? String(params.label) : undefined
+        });
+        // Forward agent events to all gateway clients
+        agent.on('status',    (e) => this.broadcastEvent({ type: 'agent:status',    agentId: e.agentId, data: e.data }));
+        agent.on('iteration', (e) => this.broadcastEvent({ type: 'agent:iteration', agentId: e.agentId, data: e.data }));
+        agent.on('chunk',     (e) => this.broadcastEvent({ type: 'agent:chunk',     agentId: e.agentId, data: e.data }));
+        agent.on('tool',      (e) => this.broadcastEvent({ type: 'agent:tool',      agentId: e.agentId, data: e.data }));
+        agent.on('done',      (e) => this.broadcastEvent({ type: 'agent:done',      agentId: e.agentId, data: e.data }));
+        return agent.toJSON();
+      }
+      case 'agents.list':      return agentPool.list();
+      case 'agents.get':       return agentPool.get(String(params.id))?.toJSON() ?? null;
+      case 'agents.abort':     return { ok: agentPool.abort(String(params.id)) };
+      case 'agents.pause':     return { ok: agentPool.pause(String(params.id)) };
+      case 'agents.resume':    return { ok: agentPool.resume(String(params.id)) };
+      case 'agents.clearDone': agentPool.clearDone(); return { ok: true };
+
+      // ─── Cron Scheduler ───────────────────────────────────────────────────
+      case 'cron.list':   return cronScheduler.list();
+      case 'cron.add':    return cronScheduler.add(params as Parameters<typeof cronScheduler.add>[0]);
+      case 'cron.remove': return { ok: cronScheduler.remove(String(params.id)) };
+      case 'cron.update': return { ok: cronScheduler.update(String(params.id), params as Parameters<typeof cronScheduler.update>[1]) };
+      case 'cron.runNow': cronScheduler.runNow(String(params.id)); return { ok: true };
+
+      // ─── Telegram ─────────────────────────────────────────────────────────
+      case 'telegram.connect': {
+        const result = await telegramClient.connect({
+          apiId:          Number(params.apiId),
+          apiHash:        String(params.apiHash),
+          session:        String(params.session ?? ''),
+          triggerPattern: params.triggerPattern ? String(params.triggerPattern) : undefined,
+          autoReply:      Boolean(params.autoReply ?? false)
+        });
+        telegramClient.on('message', (msg) => this.broadcastEvent({ type: 'telegram:message', data: msg }));
+        telegramClient.on('agent:done', (e) => this.broadcastEvent({ type: 'telegram:agent:done', data: e }));
+        return result;
+      }
+      case 'telegram.disconnect': await telegramClient.disconnect(); return { ok: true };
+      case 'telegram.status':     return telegramClient.status();
+      case 'telegram.send':       await telegramClient.sendMessage(params.chatId as string | number, String(params.text)); return { ok: true };
+      case 'telegram.history':    return telegramClient.getHistory(params.chatId as string | number, Number(params.limit ?? 20));
+
+      // ─── Context ──────────────────────────────────────────────────────────
+      case 'context.resolve': {
+        const cwd = String(params.cwd ?? process.cwd());
+        return resolveContextRefs(String(params.text), cwd);
+      }
+      case 'context.autocomplete': {
+        const cwd = String(params.cwd ?? process.cwd());
+        return autocompleteRef(String(params.prefix ?? ''), cwd);
+      }
+      case 'claudemd.get': {
+        const cwd = String(params.cwd ?? process.cwd());
+        const content = loadClaudeMd(cwd);
+        const filePath = findClaudeMdPath(cwd);
+        return { content, filePath };
+      }
+
+      // ─── Export ───────────────────────────────────────────────────────────
+      case 'sessions.export': {
+        const sid    = String(params.id ?? 'main');
+        const format = String(params.format ?? 'markdown') as 'markdown' | 'json';
+        const session = sessionManager.getSession(sid) ?? sessionManager.getOrCreateMain();
+        const content  = format === 'json' ? exportToJSON(session) : exportToMarkdown(session);
+        const filename = getExportFilename(session, format);
+        return { content, filename };
+      }
+
+      // ─── Telemetry ────────────────────────────────────────────────────────
+      case 'telemetry.session': {
+        const sid = String(params.id ?? 'main');
+        const s   = sessionManager.getSession(sid) ?? sessionManager.getOrCreateMain();
+        const inp = s.totalInputTokens  ?? 0;
+        const out = s.totalOutputTokens ?? 0;
+        const cost = calculateCost(s.config.model, inp, out);
+        return {
+          inputTokens:  inp,
+          outputTokens: out,
+          totalTokens:  inp + out,
+          cost,
+          costFormatted: formatCost(cost),
+          inputFormatted:  formatTokenCount(inp),
+          outputFormatted: formatTokenCount(out),
+          model: s.config.model,
+          pricing: getPricing(s.config.model)
+        };
+      }
+
+      // ─── Memory ───────────────────────────────────────────────────────────
+      case 'memory.add': {
+        const cwd = String(params.cwd ?? process.cwd());
+        const pm  = new ProjectMemory(cwd);
+        return pm.remember(String(params.content), (params.tags as string[]) ?? [], (params.metadata as Record<string, unknown>) ?? {});
+      }
+      case 'memory.recall': {
+        const cwd = String(params.cwd ?? process.cwd());
+        const pm  = new ProjectMemory(cwd);
+        return pm.recall(String(params.query), Number(params.topK ?? 5));
+      }
+      case 'memory.list': {
+        const cwd = String(params.cwd ?? process.cwd());
+        return new ProjectMemory(cwd).list();
+      }
+      case 'memory.forget': {
+        const ok = vectorStore.forget(String(params.id));
+        return { ok };
+      }
+      case 'memory.stats': {
+        const cwd = String(params.cwd ?? process.cwd());
+        return new ProjectMemory(cwd).stats();
+      }
+
       default:
         throw new Error(`Method not found: ${request.method}`);
+    }
+  }
+
+  private broadcastEvent(event: Record<string, unknown>): void {
+    const msg = JSON.stringify({ jsonrpc: '2.0', id: null, result: event });
+    for (const [, client] of this.clients) {
+      if (client.authenticated && client.ws.readyState === WebSocket.OPEN) {
+        client.ws.send(msg);
+      }
+    }
+  }
+
+  private sendToClient(clientId: string, event: Record<string, unknown>): void {
+    const client = this.clients.get(clientId);
+    if (client?.ws.readyState === WebSocket.OPEN) {
+      client.ws.send(JSON.stringify({ jsonrpc: '2.0', id: null, result: event }));
     }
   }
 
@@ -370,7 +535,7 @@ export class GatewayServer {
   ): Promise<unknown> {
     const client = this.clients.get(clientId)!;
     const sessionId = String(params.sessionId ?? 'main');
-    const userMessage = String(params.message ?? '');
+    const rawMessage = String(params.message ?? '');
 
     const session = sessionId === 'main'
       ? sessionManager.getOrCreateMain()
@@ -378,13 +543,42 @@ export class GatewayServer {
 
     if (!session) throw new Error(`Session not found: ${sessionId}`);
 
+    // ── Resolve @file/@url/@git context refs ──────────────────────────────
+    const { expanded: userMessage, refs } = await resolveContextRefs(rawMessage, session.cwd ?? process.cwd());
+    if (refs.length > 0) {
+      this.sendToClient(clientId, { type: 'context.refs', refs: refs.map(r => ({ raw: r.raw, type: r.type, error: r.error })) });
+    }
+
+    // ── Auto-inject CLAUDE.md system prompt ───────────────────────────────
+    let effectiveSystemPrompt = session.config.systemPrompt ?? '';
+    const claudeMd = loadClaudeMd(session.cwd ?? process.cwd());
+    if (claudeMd && !effectiveSystemPrompt.includes('<!-- CLAUDE.md -->')) {
+      effectiveSystemPrompt = `<!-- CLAUDE.md -->\n${claudeMd}\n\n---\n\n${effectiveSystemPrompt}`;
+    }
+
+    // ── Auto-recall project memories ──────────────────────────────────────
+    const pm = new ProjectMemory(session.cwd ?? process.cwd());
+    const memories = pm.recall(rawMessage, 3);
+    if (memories.length > 0) {
+      const memContext = pm.formatForPrompt(memories);
+      effectiveSystemPrompt = `${effectiveSystemPrompt}\n\n${memContext}`;
+    }
+
+    // ── Handle image attachments ──────────────────────────────────────────
+    const images = params.images as string[] | undefined;
+
     // Add user message
     sessionManager.addMessage(session.id, {
       role: 'user',
-      content: userMessage
+      content: images?.length
+        ? ([{ type: 'text', text: userMessage }, ...images.map(img => ({ type: 'image_url' as const, image_url: { url: img } }))] as unknown as import('../models/index.js').ContentBlock[])
+        : userMessage
     });
 
-    const { provider, model, systemPrompt, thinking, thinkingBudget, maxTokens } = session.config;
+    // ── Fire chat:send hook ───────────────────────────────────────────────
+    await hooksManager.run('chat:send', { sessionId, command: rawMessage });
+
+    const { provider, model, thinking, thinkingBudget, maxTokens } = session.config;
 
     const adapter = await getAdapter(provider as ModelProvider, model);
     const tools = getToolDefinitions();
@@ -406,7 +600,7 @@ export class GatewayServer {
       const result = await adapter.generate({
         messages: session.messages,
         tools,
-        systemPrompt,
+        systemPrompt: effectiveSystemPrompt,
         thinking,
         thinkingBudget,
         maxTokens,
@@ -421,6 +615,20 @@ export class GatewayServer {
       });
 
       sessionManager.updateTokenCounts(session.id, result.inputTokens, result.outputTokens);
+
+      // Broadcast token usage after each turn
+      const msgCost = calculateCost(model, result.inputTokens ?? 0, result.outputTokens ?? 0);
+      this.broadcastToClient(client.ws, {
+        type: 'chat.tokens',
+        sessionId: session.id,
+        inputTokens:   result.inputTokens  ?? 0,
+        outputTokens:  result.outputTokens ?? 0,
+        cost:          msgCost,
+        costFormatted: formatCost(msgCost),
+        totalInput:    session.totalInputTokens,
+        totalOutput:   session.totalOutputTokens,
+        totalCost:     formatCost(calculateCost(model, session.totalInputTokens, session.totalOutputTokens))
+      });
 
       // Add assistant message
       sessionManager.addMessage(session.id, {

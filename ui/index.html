@@ -20,7 +20,9 @@
       <span class="nd-version">v1.0.0</span>
     </div>
     <div id="titlebar-controls">
-      <button class="ctrl-btn" id="btn-settings" title="Settings [Ctrl+,]">⚙</button>
+      <button class="ctrl-btn" id="btn-settings"  title="Settings [Ctrl+,]">⚙</button>
+      <button class="ctrl-btn" id="btn-agents"   title="Background Agents [Ctrl+B]">⚡</button>
+      <button class="ctrl-btn" id="btn-memory"   title="Project Memory [Ctrl+M]">◈</button>
       <button class="ctrl-btn" id="btn-fullscreen" title="Fullscreen [F11]">⛶</button>
       <button class="ctrl-btn" id="btn-minimize" title="Minimize">─</button>
       <button class="ctrl-btn" id="btn-maximize" title="Maximize">□</button>
@@ -85,6 +87,8 @@
         <div class="panel-header">
           <span>NEURAL INTERFACE</span>
           <div class="console-controls">
+            <span id="token-counter" style="font-size:9px;color:var(--color-text-dim);letter-spacing:1px;margin-right:6px;"></span>
+            <button class="console-btn" id="btn-export-chat" title="Export Chat">↓ EXPORT</button>
             <button class="console-btn" id="btn-model-select" title="Select Model">⚡ MODEL</button>
             <button class="console-btn" id="btn-clear-chat" title="Clear Chat">⊘ CLEAR</button>
             <button class="console-btn" id="btn-new-session" title="New Session">+ SESSION</button>
@@ -345,6 +349,8 @@
   <script src="js/file-browser.js"></script>
   <script src="js/config-panel.js"></script>
   <script src="js/settings.js"></script>
+  <script src="js/background-agents.js"></script>
+  <script src="js/memory-panel.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

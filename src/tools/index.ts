@@ -28,6 +28,18 @@ import { GrepTool } from './grep.js';
 import { TodoTool } from './todo.js';
 import { WebFetchTool } from './webfetch.js';
 import { mcpManager } from '../mcp/client.js';
+import { hooksManager } from '../hooks/manager.js';
+import { executeBrowserAction, getBrowserToolDefinition } from './browser.js';
+
+// Browser tool wrapper
+const browserTool: Tool = {
+  definition: getBrowserToolDefinition() as unknown as ToolDefinition,
+  execute: async (input) => {
+    const result = await executeBrowserAction(input as unknown as Parameters<typeof executeBrowserAction>[0]);
+    if (!result.success) return { success: false, output: '', error: result.error };
+    return { success: true, output: result.output || (result.screenshot ? '[screenshot captured]' : '') };
+  }
+};
 
 export const ALL_TOOLS: Tool[] = [
   new BashTool(),
@@ -37,7 +49,8 @@ export const ALL_TOOLS: Tool[] = [
   new GlobTool(),
   new GrepTool(),
   new TodoTool(),
-  new WebFetchTool()
+  new WebFetchTool(),
+  browserTool
 ];
 
 export function getToolDefinitions(): ToolDefinition[] {
@@ -54,10 +67,17 @@ export async function executeTool(
   name: string,
   input: Record<string, unknown>
 ): Promise<ToolResult> {
+  // Run pre-tool hooks
+  const preResults = await hooksManager.run('pre:tool', { toolName: name, command: (input.command as string) || '' });
+  if (hooksManager.isBlocked(preResults)) {
+    return { success: false, output: '', error: `Blocked by pre-hook: ${preResults.find(r => r.blocked)?.stderr || 'denied'}` };
+  }
+
   // MCP tool?
   if (name.startsWith('mcp__')) {
     try {
       const output = await mcpManager.executeTool(name, input);
+      await hooksManager.run('post:tool', { toolName: name, result: output });
       return { success: true, output };
     } catch (err) {
       return { success: false, output: '', error: err instanceof Error ? err.message : String(err) };
@@ -69,7 +89,9 @@ export async function executeTool(
     return { success: false, output: '', error: `Unknown tool: ${name}` };
   }
   try {
-    return await tool.execute(input);
+    const result = await tool.execute(input);
+    await hooksManager.run('post:tool', { toolName: name, result: result.output });
+    return result;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { success: false, output: '', error: message };

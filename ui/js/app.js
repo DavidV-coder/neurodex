@@ -31,10 +31,39 @@
     if (e.ctrlKey && e.key === ',') { e.preventDefault(); window.settingsPanel?.show(); }
     if (e.ctrlKey && e.key === 'l') { e.preventDefault(); window.agentConsole?.clear?.(); }
     if (e.ctrlKey && e.key === 'n') { e.preventDefault(); window.agentConsole?.newSession?.(); }
+    if (e.ctrlKey && e.key === 'b') { e.preventDefault(); window.agentsPanel?.toggle(); }
+    if (e.ctrlKey && e.key === 'm') { e.preventDefault(); window.memoryPanel?.toggle(); }
   });
 
-  // Settings gear button (if present in header)
   document.getElementById('btn-settings')?.addEventListener('click', () => window.settingsPanel?.show());
+  document.getElementById('btn-agents')?.addEventListener('click',   () => window.agentsPanel?.toggle());
+  document.getElementById('btn-memory')?.addEventListener('click',   () => window.memoryPanel?.toggle());
+
+  document.getElementById('btn-export-chat')?.addEventListener('click', async () => {
+    try {
+      const { content, filename } = await gateway.call('sessions.export', { id: 'main', format: 'markdown' });
+      const blob = new Blob([content], { type: 'text/markdown' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      window.settingsPanel?._showToast('Export failed: ' + err.message, true);
+    }
+  });
+
+  // Token counter in chat header — update on token events
+  gateway.addEventListener('event', e => {
+    const d = e.detail;
+    if (d?.type === 'chat.tokens') {
+      const el = document.getElementById('token-counter');
+      if (el) el.textContent = `${d.totalCost} · ${d.totalInput}↑ ${d.totalOutput}↓`;
+    }
+    // Permission request → show dialog
+    if (d?.type === 'permission:request') {
+      window.settingsPanel?.showPermissionRequest(d);
+    }
+  });
 
   // ── Step 1: get gateway token (max 3s wait) ──────────────────────────────
   let gatewayToken = null;
