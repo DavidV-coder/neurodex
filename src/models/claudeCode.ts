@@ -63,8 +63,8 @@ export class ClaudeCodeAdapter implements ModelAdapter {
     const args: string[] = [
       '--print',
       '--output-format', stream ? 'stream-json' : 'json',
-      '--no-session-persistence',
-      '--dangerously-skip-permissions', // needed for non-interactive automation
+      '--verbose',
+      '--dangerously-skip-permissions',
     ];
 
     if (systemPrompt) {
@@ -94,12 +94,26 @@ export class ClaudeCodeAdapter implements ModelAdapter {
           if (!line.trim()) return;
           try {
             const obj = JSON.parse(line);
+            // stream-json --verbose format: assistant message chunks
+            if (obj.type === 'assistant' && obj.message?.content) {
+              for (const block of obj.message.content) {
+                if (block.type === 'text' && block.text) {
+                  const newText = block.text.slice(fullText.length);
+                  if (newText) {
+                    fullText = block.text;
+                    onChunk({ type: 'text', text: newText });
+                  }
+                }
+              }
+            }
+            // Also handle classic content_block_delta (older CLI versions)
             if (obj.type === 'content_block_delta' && obj.delta?.type === 'text_delta') {
               const text = obj.delta.text || '';
               fullText += text;
               onChunk({ type: 'text', text });
-            } else if (obj.type === 'result' && obj.subtype === 'success') {
-              costUsd = obj.cost_usd || 0;
+            }
+            if (obj.type === 'result' && obj.subtype === 'success') {
+              costUsd = obj.total_cost_usd || obj.cost_usd || 0;
               if (obj.result && !fullText) fullText = obj.result;
             }
           } catch { /* skip non-JSON lines */ }
