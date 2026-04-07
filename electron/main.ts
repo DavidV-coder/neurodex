@@ -100,6 +100,9 @@ function createWindow(token: string): void {
 
   mainWindow.loadFile(path.join(ROOT, 'ui', 'index.html'));
 
+  // Open DevTools for debugging
+  mainWindow.webContents.openDevTools({ mode: 'detach' });
+
   mainWindow.webContents.once('did-finish-load', () => {
     mainWindow?.webContents.send('gateway:token', { token, port: 18789 });
   });

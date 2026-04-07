@@ -88,22 +88,22 @@ class AgentConsole {
   _listenGatewayEvents() {
     gateway.addEventListener('event', (e) => {
       const data = e.detail;
-      console.log('[Chat] event:', data.type);
+      console.log('[Chat] event:', data.type, '| sessionId:', data.sessionId, '| mine:', this.sessionId);
       switch (data.type) {
         case 'chat.stream.chunk':
-          if (data.sessionId === this.sessionId) this._handleChunk(data.chunk);
+          this._handleChunk(data.chunk);
           break;
         case 'chat.stream.start':
-          if (data.sessionId === this.sessionId) this._onStreamStart();
+          this._onStreamStart();
           break;
         case 'chat.stream.done':
-          if (data.sessionId === this.sessionId) this._onStreamDone();
+          this._onStreamDone();
           break;
         case 'chat.tool.start':
-          if (data.sessionId === this.sessionId) this._onToolStart(data);
+          this._onToolStart(data);
           break;
         case 'chat.tool.done':
-          if (data.sessionId === this.sessionId) this._onToolDone(data);
+          this._onToolDone(data);
           break;
         case 'permission.request':
           this._showPermissionDialog(data.request);
@@ -211,7 +211,7 @@ class AgentConsole {
 
   _handleChunk(chunk) {
     console.log('[Chat] chunk:', chunk.type, chunk.text?.slice(0, 20));
-    if (chunk.type === 'done') { this._onStreamDone(); return; }
+    if (chunk.type === 'done') { return; /* _onStreamDone called via chat.stream.done event */ }
     if (chunk.type === 'error') { this._appendError(chunk.error || 'Stream error'); this._onStreamDone(); return; }
     if (!this.streamingEl) return;
     const bubble = this.streamingEl.querySelector('.msg-bubble');
