@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src ws://127.0.0.1:18789;">
+  <title>NeuroDEX</title>
+  <link rel="stylesheet" href="assets/css/augmented.css">
+  <link rel="stylesheet" href="assets/css/neurodex.css">
+  <link rel="stylesheet" href="assets/css/xterm.css">
+  <link rel="stylesheet" href="assets/css/themes/tron.css" id="theme-stylesheet">
+</head>
+<body>
+  <!-- Window Controls -->
+  <div id="titlebar">
+    <div id="titlebar-title">
+      <span class="nd-logo">⬡</span>
+      <span class="nd-title-text">NEURODEX</span>
+      <span class="nd-version">v1.0.0</span>
+    </div>
+    <div id="titlebar-controls">
+      <button class="ctrl-btn" id="btn-fullscreen" title="Fullscreen [F11]">⛶</button>
+      <button class="ctrl-btn" id="btn-minimize" title="Minimize">─</button>
+      <button class="ctrl-btn" id="btn-maximize" title="Maximize">□</button>
+      <button class="ctrl-btn ctrl-close" id="btn-close" title="Close">✕</button>
+    </div>
+  </div>
+
+  <!-- Main Layout -->
+  <div id="app-container">
+
+    <!-- LEFT PANEL: System Monitor (eDEX-style) -->
+    <div id="panel-left" class="panel" data-augmented-ui="tl-clip br-clip border">
+      <div class="panel-header">SYSTEM</div>
+
+      <!-- CPU -->
+      <div class="sysinfo-block" id="cpu-block">
+        <div class="sysinfo-label">CPU</div>
+        <div id="cpu-model" class="sysinfo-value">Loading...</div>
+        <canvas id="cpu-chart" width="220" height="50"></canvas>
+        <div id="cpu-cores" class="cores-grid"></div>
+      </div>
+
+      <!-- RAM -->
+      <div class="sysinfo-block" id="ram-block">
+        <div class="sysinfo-label">MEMORY</div>
+        <div id="ram-bar" class="progress-bar">
+          <div id="ram-used" class="progress-fill"></div>
+        </div>
+        <div id="ram-info" class="sysinfo-value">-- / --</div>
+      </div>
+
+      <!-- Network -->
+      <div class="sysinfo-block" id="net-block">
+        <div class="sysinfo-label">NETWORK</div>
+        <div id="net-rx" class="sysinfo-value net-stat">↓ --</div>
+        <div id="net-tx" class="sysinfo-value net-stat">↑ --</div>
+      </div>
+
+      <!-- AI Status -->
+      <div class="sysinfo-block" id="ai-status-block">
+        <div class="sysinfo-label">AI ENGINE</div>
+        <div id="ai-provider" class="sysinfo-value ai-badge">OFFLINE</div>
+        <div id="ai-model" class="sysinfo-value">--</div>
+        <div id="ai-tokens" class="sysinfo-value token-counter">
+          <span>IN: <span id="tokens-in">0</span></span>
+          <span>OUT: <span id="tokens-out">0</span></span>
+        </div>
+      </div>
+
+      <!-- Clock -->
+      <div id="clock-block">
+        <div id="clock-time">00:00:00</div>
+        <div id="clock-date">----/--/--</div>
+      </div>
+    </div>
+
+    <!-- CENTER: Terminal + Agent Console -->
+    <div id="panel-center">
+
+      <!-- Agent Console -->
+      <div id="agent-console" class="panel" data-augmented-ui="tl-clip tr-clip border">
+        <div class="panel-header">
+          <span>NEURAL INTERFACE</span>
+          <div class="console-controls">
+            <button class="console-btn" id="btn-model-select" title="Select Model">⚡ MODEL</button>
+            <button class="console-btn" id="btn-clear-chat" title="Clear Chat">⊘ CLEAR</button>
+            <button class="console-btn" id="btn-new-session" title="New Session">+ SESSION</button>
+          </div>
+        </div>
+        <div id="chat-messages"></div>
+        <div id="tool-stream" class="tool-stream hidden"></div>
+        <div id="permission-dialog" class="permission-dialog hidden"></div>
+        <div id="chat-input-area">
+          <div id="chat-input-prefix">›</div>
+          <textarea id="chat-input" placeholder="Enter command or query... (Shift+Enter for newline, Enter to send)" rows="1"></textarea>
+          <button id="btn-send" title="Send [Enter]">SEND</button>
+        </div>
+      </div>
+
+      <!-- Terminal -->
+      <div id="terminal-panel" class="panel" data-augmented-ui="bl-clip br-clip border">
+        <div class="panel-header">
+          <span>TERMINAL</span>
+          <div class="terminal-tabs" id="terminal-tabs">
+            <button class="tab-btn active" data-tab="0">bash</button>
+            <button class="tab-btn" id="btn-new-tab">+</button>
+          </div>
+        </div>
+        <div id="terminal-container"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL: File Browser + Process Monitor -->
+    <div id="panel-right" class="panel" data-augmented-ui="tr-clip bl-clip border">
+      <div class="panel-header">
+        <span id="panel-right-title">FILES</span>
+        <div>
+          <button class="panel-tab-btn active" data-panel="files">FILES</button>
+          <button class="panel-tab-btn" data-panel="processes">PROC</button>
+          <button class="panel-tab-btn" data-panel="config">CFG</button>
+        </div>
+      </div>
+
+      <!-- File Browser -->
+      <div id="files-panel" class="right-subpanel">
+        <div id="files-path" class="files-path">/</div>
+        <div id="files-list"></div>
+      </div>
+
+      <!-- Process Monitor -->
+      <div id="processes-panel" class="right-subpanel hidden">
+        <div class="proc-header">
+          <span>PID</span><span>CPU%</span><span>MEM%</span><span>NAME</span>
+        </div>
+        <div id="proc-list"></div>
+      </div>
+
+      <!-- Config Panel -->
+      <div id="config-panel" class="right-subpanel hidden">
+        <div class="config-section">
+          <div class="config-title">API KEYS</div>
+          <div id="api-keys-list"></div>
+          <button class="config-btn" id="btn-add-key">+ ADD KEY</button>
+        </div>
+        <div class="config-section">
+          <div class="config-title">PERMISSIONS</div>
+          <div id="permissions-config"></div>
+        </div>
+        <div class="config-section">
+          <div class="config-title">THEME</div>
+          <div id="theme-selector"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Overlays -->
+  <div id="model-selector-overlay" class="overlay hidden">
+    <div class="overlay-panel" data-augmented-ui="tl-clip br-clip border">
+      <div class="overlay-header">SELECT MODEL <button class="overlay-close">✕</button></div>
+      <div id="model-list"></div>
+    </div>
+  </div>
+
+  <div id="key-input-overlay" class="overlay hidden">
+    <div class="overlay-panel" data-augmented-ui="tl-clip br-clip border">
+      <div class="overlay-header">ADD API KEY <button class="overlay-close">✕</button></div>
+      <div id="key-input-form">
+        <select id="key-provider-select"></select>
+        <input type="password" id="key-value-input" placeholder="Enter API key...">
+        <button id="btn-save-key">SAVE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="assets/vendor/xterm.js"></script>
+  <script src="assets/vendor/xterm-addon-fit.js"></script>
+  <script src="assets/vendor/xterm-addon-web-links.js"></script>
+  <script src="assets/vendor/smoothie.js"></script>
+  <script src="assets/vendor/marked.min.js"></script>
+  <script src="assets/vendor/highlight.min.js"></script>
+
+  <script src="js/gateway.js"></script>
+  <script src="js/terminal.js"></script>
+  <script src="js/agent-console.js"></script>
+  <script src="js/system-monitor.js"></script>
+  <script src="js/file-browser.js"></script>
+  <script src="js/config-panel.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

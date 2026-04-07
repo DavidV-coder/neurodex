@@ -1,0 +1,21 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+.DS_Store
+*.dmg
+*.AppImage
+*.exe
+*.snap
+release/
+out/
+prebuild-src/
+
+# Security - never commit keys
+.neurodex/
+~/.config/NeuroDEX/secrets/
+
+# Electron build artifacts
+app-update.yml
+builder-debug.yml
