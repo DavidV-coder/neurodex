@@ -19,3 +19,9 @@ prebuild-src/
 # Electron build artifacts
 app-update.yml
 builder-debug.yml
+
+# compiled JS artifacts inside src/ (from bare tsc runs without outDir)
+src/**/*.js
+src/**/*.js.map
+src/**/*.d.ts
+src/**/*.d.ts.map

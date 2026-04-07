@@ -28,7 +28,13 @@
   document.addEventListener('keydown', (e) => {
     if (e.key === 'F11') { e.preventDefault(); window.NeuroDEX?.window.fullscreen(); }
     if (e.ctrlKey && e.key === 'k') { e.preventDefault(); window.modelSelector?.show(); }
+    if (e.ctrlKey && e.key === ',') { e.preventDefault(); window.settingsPanel?.show(); }
+    if (e.ctrlKey && e.key === 'l') { e.preventDefault(); window.agentConsole?.clear?.(); }
+    if (e.ctrlKey && e.key === 'n') { e.preventDefault(); window.agentConsole?.newSession?.(); }
   });
+
+  // Settings gear button (if present in header)
+  document.getElementById('btn-settings')?.addEventListener('click', () => window.settingsPanel?.show());
 
   // ── Step 1: get gateway token (max 3s wait) ──────────────────────────────
   let gatewayToken = null;

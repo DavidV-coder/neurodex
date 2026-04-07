@@ -20,6 +20,7 @@
       <span class="nd-version">v1.0.0</span>
     </div>
     <div id="titlebar-controls">
+      <button class="ctrl-btn" id="btn-settings" title="Settings [Ctrl+,]">⚙</button>
       <button class="ctrl-btn" id="btn-fullscreen" title="Fullscreen [F11]">⛶</button>
       <button class="ctrl-btn" id="btn-minimize" title="Minimize">─</button>
       <button class="ctrl-btn" id="btn-maximize" title="Maximize">□</button>
@@ -175,6 +176,160 @@
     </div>
   </div>
 
+  <!-- Settings Overlay (Ctrl+, or gear icon) -->
+  <div id="settings-overlay" class="overlay hidden">
+    <div class="overlay-panel settings-panel" data-augmented-ui="tl-clip br-clip border">
+      <div class="overlay-header">
+        SETTINGS
+        <span style="font-size:9px;color:var(--color-text-dim);margin-left:8px;">NEURODEX v1.0</span>
+        <button class="overlay-close">✕</button>
+      </div>
+
+      <!-- Tab bar -->
+      <div class="settings-tabs">
+        <button class="stab active" data-stab="keys">API KEYS</button>
+        <button class="stab" data-stab="models">MODELS</button>
+        <button class="stab" data-stab="mcp">MCP SERVERS</button>
+        <button class="stab" data-stab="perms">PERMISSIONS</button>
+        <button class="stab" data-stab="cli">CLI</button>
+        <button class="stab" data-stab="about">ABOUT</button>
+      </div>
+
+      <!-- API Keys tab -->
+      <div class="stab-content" id="stab-keys">
+        <div class="stab-section-title">API KEYS</div>
+        <div id="settings-keys-list" class="settings-keys-list"></div>
+        <div class="settings-add-key-row">
+          <select id="settings-provider-select" class="settings-select">
+            <option value="claude">Claude (Anthropic)</option>
+            <option value="openai">OpenAI</option>
+            <option value="gemini">Gemini (Google)</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="mistral">Mistral</option>
+          </select>
+          <input type="password" id="settings-key-input" class="settings-input" placeholder="sk-...">
+          <button id="settings-btn-save-key" class="settings-btn-primary">SAVE KEY</button>
+        </div>
+        <div class="stab-hint">Keys are stored in OS keychain (macOS Keychain / Linux Secret Service / Windows Credential Store)</div>
+      </div>
+
+      <!-- Models tab -->
+      <div class="stab-content hidden" id="stab-models">
+        <div class="stab-section-title">DEFAULT MODEL</div>
+        <div id="settings-model-list" class="settings-model-list"></div>
+        <div class="stab-hint">Click a model to set as default. Ctrl+K opens quick model switcher.</div>
+      </div>
+
+      <!-- MCP Servers tab -->
+      <div class="stab-content hidden" id="stab-mcp">
+        <div class="stab-section-title">MCP SERVERS</div>
+        <div id="settings-mcp-list" class="settings-mcp-list"></div>
+        <div class="stab-section-title" style="margin-top:12px;">ADD SERVER</div>
+        <div class="settings-mcp-form">
+          <input type="text" id="mcp-id-input"      class="settings-input" placeholder="server-id (e.g. filesystem)">
+          <input type="text" id="mcp-command-input" class="settings-input" placeholder="command (e.g. npx)">
+          <input type="text" id="mcp-args-input"    class="settings-input" placeholder="args (space-separated, e.g. -y @modelcontextprotocol/server-filesystem /path)">
+          <input type="text" id="mcp-env-input"     class="settings-input" placeholder="env vars (KEY=VALUE KEY2=VALUE2)">
+          <button id="settings-btn-add-mcp" class="settings-btn-primary">ADD SERVER</button>
+        </div>
+        <div class="stab-section-title" style="margin-top:12px;">PRESETS</div>
+        <div id="settings-mcp-presets" class="settings-mcp-presets"></div>
+      </div>
+
+      <!-- Permissions tab -->
+      <div class="stab-content hidden" id="stab-perms">
+        <div class="stab-section-title">TOOL PERMISSIONS</div>
+        <div class="stab-hint" style="margin-bottom:10px;">Controls whether the AI can use each tool automatically (ALLOW), ask first (ASK), or never (DENY).</div>
+        <div id="settings-perms-list" class="settings-perms-list"></div>
+      </div>
+
+      <!-- CLI tab -->
+      <div class="stab-content hidden" id="stab-cli">
+        <div class="stab-section-title">CLI INSTALLATION</div>
+        <div class="stab-hint">Run NeuroDEX from any terminal.</div>
+        <div id="settings-cli-status" class="settings-cli-status">Checking...</div>
+        <div class="settings-cli-commands">
+          <div class="cli-cmd-row">
+            <span class="cli-cmd-label">Install globally:</span>
+            <code class="cli-cmd-code" id="cli-install-cmd">npm install -g .</code>
+            <button class="cli-cmd-copy" data-copy="cli-install-cmd">COPY</button>
+          </div>
+          <div class="cli-cmd-row">
+            <span class="cli-cmd-label">Run onboarding:</span>
+            <code class="cli-cmd-code" id="cli-onboard-cmd">neurodex onboard</code>
+            <button class="cli-cmd-copy" data-copy="cli-onboard-cmd">COPY</button>
+          </div>
+          <div class="cli-cmd-row">
+            <span class="cli-cmd-label">List models:</span>
+            <code class="cli-cmd-code" id="cli-models-cmd">neurodex model list</code>
+            <button class="cli-cmd-copy" data-copy="cli-models-cmd">COPY</button>
+          </div>
+          <div class="cli-cmd-row">
+            <span class="cli-cmd-label">Set model:</span>
+            <code class="cli-cmd-code" id="cli-setmodel-cmd">neurodex model set claude-opus-4-5</code>
+            <button class="cli-cmd-copy" data-copy="cli-setmodel-cmd">COPY</button>
+          </div>
+          <div class="cli-cmd-row">
+            <span class="cli-cmd-label">Manage keys:</span>
+            <code class="cli-cmd-code" id="cli-keys-cmd">neurodex keys list</code>
+            <button class="cli-cmd-copy" data-copy="cli-keys-cmd">COPY</button>
+          </div>
+          <div class="cli-cmd-row">
+            <span class="cli-cmd-label">Status:</span>
+            <code class="cli-cmd-code" id="cli-status-cmd">neurodex status</code>
+            <button class="cli-cmd-copy" data-copy="cli-status-cmd">COPY</button>
+          </div>
+        </div>
+        <div class="stab-section-title" style="margin-top:16px;">GATEWAY</div>
+        <div id="settings-gateway-info" class="settings-gateway-info">Loading...</div>
+      </div>
+
+      <!-- About tab -->
+      <div class="stab-content hidden" id="stab-about">
+        <div class="settings-about">
+          <div class="about-logo">⬡</div>
+          <div class="about-name">NEURODEX</div>
+          <div class="about-version">v1.0.0</div>
+          <div class="about-desc">Sci-fi AI terminal — eDEX-UI interface with full multi-model support.<br>Claude · OpenAI · Gemini · DeepSeek · Mistral · Ollama</div>
+          <div class="about-links">
+            <div class="about-stat" id="about-model">Model: loading...</div>
+            <div class="about-stat" id="about-gateway">Gateway: checking...</div>
+            <div class="about-stat" id="about-mcp-count">MCP Servers: —</div>
+            <div class="about-stat" id="about-skills-count">Skills: —</div>
+          </div>
+          <div class="stab-section-title" style="margin-top:16px;">KEYBOARD SHORTCUTS</div>
+          <div class="about-shortcuts">
+            <div class="shortcut-row"><kbd>Ctrl+K</kbd><span>Select model</span></div>
+            <div class="shortcut-row"><kbd>Ctrl+,</kbd><span>Open settings</span></div>
+            <div class="shortcut-row"><kbd>Ctrl+L</kbd><span>Clear chat</span></div>
+            <div class="shortcut-row"><kbd>Ctrl+N</kbd><span>New session</span></div>
+            <div class="shortcut-row"><kbd>Enter</kbd><span>Send message</span></div>
+            <div class="shortcut-row"><kbd>Shift+Enter</kbd><span>New line</span></div>
+            <div class="shortcut-row"><kbd>↑/↓</kbd><span>History nav</span></div>
+            <div class="shortcut-row"><kbd>F11</kbd><span>Fullscreen</span></div>
+            <div class="shortcut-row"><kbd>/help</kbd><span>List all skills</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Permission Dialog -->
+  <div id="permission-dialog" class="overlay hidden">
+    <div class="overlay-panel perm-dialog-panel" data-augmented-ui="tl-clip br-clip border">
+      <div class="overlay-header" style="color:var(--color-warn);">PERMISSION REQUEST</div>
+      <div id="perm-dialog-body" class="perm-dialog-body"></div>
+      <div class="perm-dialog-actions">
+        <label class="perm-remember-label">
+          <input type="checkbox" id="perm-remember"> Remember for session
+        </label>
+        <button id="perm-deny-btn"  class="settings-btn-danger">DENY</button>
+        <button id="perm-allow-btn" class="settings-btn-primary">ALLOW</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts -->
   <script src="assets/vendor/xterm.js"></script>
   <script src="assets/vendor/xterm-addon-fit.js"></script>
@@ -189,6 +344,7 @@
   <script src="js/system-monitor.js"></script>
   <script src="js/file-browser.js"></script>
   <script src="js/config-panel.js"></script>
+  <script src="js/settings.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

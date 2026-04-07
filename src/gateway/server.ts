@@ -49,6 +49,13 @@ export class GatewayServer {
   private clients: Map<string, ClientInfo> = new Map();
   private config: GatewayConfig;
   private token: string;
+  private configStore: Map<string, unknown> = new Map();
+  private startTime: number = Date.now();
+
+  // Accessors for RPC handlers
+  get host(): string { return this.config.host; }
+  get port(): number { return this.config.port; }
+  get sessions(): Map<string, ClientInfo> { return this.clients; }
 
   constructor(config: Partial<GatewayConfig> = {}) {
     this.config = {
@@ -225,6 +232,23 @@ export class GatewayServer {
         const key = await getApiKey(String(params.provider));
         return { hasKey: !!key };
       }
+      case 'config.get': {
+        return this.configStore.get(String(params.key)) ?? null;
+      }
+      case 'config.set': {
+        this.configStore.set(String(params.key), params.value);
+        return { ok: true };
+      }
+
+      // ─── Gateway Info ─────────────────────────────────────────────────────
+      case 'gateway.info': {
+        return {
+          host: this.host,
+          port: this.port,
+          sessions: this.sessions.size,
+          uptime: Date.now() - this.startTime
+        };
+      }
 
       // ─── Permissions ─────────────────────────────────────────────────────
       case 'permissions.respond': {
@@ -280,6 +304,26 @@ export class GatewayServer {
       }
       case 'mcp.presets': {
         return McpManager.PRESETS;
+      }
+      // Short aliases used by settings UI
+      case 'mcp.list': {
+        return mcpManager.listServers();
+      }
+      case 'mcp.add': {
+        mcpManager.addServer(params as unknown as import('../mcp/client.js').McpServerConfig);
+        await mcpManager.connect(String(params.id)).catch(() => {});
+        return { ok: true };
+      }
+      case 'mcp.remove': {
+        mcpManager.removeServer(String(params.id));
+        return { ok: true };
+      }
+      case 'mcp.addPreset': {
+        const preset = McpManager.PRESETS.find((p: { id: string }) => p.id === params.id);
+        if (!preset) throw new Error(`Unknown preset: ${params.id}`);
+        mcpManager.addServer(preset as unknown as import('../mcp/client.js').McpServerConfig);
+        await mcpManager.connect(String(preset.id)).catch(() => {});
+        return { ok: true };
       }
 
       // ─── Skills ───────────────────────────────────────────────────────────

@@ -19,7 +19,9 @@
     "lint": "eslint src electron --ext .ts,.js",
     "test": "vitest run",
     "setup": "node scripts/setup.js",
-    "postinstall": "echo 'Run: npm run setup'"
+    "postinstall": "echo 'Run: npm run setup'",
+    "cli": "tsx src/cli/index.ts",
+    "build:cli": "tsc -p tsconfig.cli.json"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
@@ -118,5 +120,8 @@
         }
       ]
     }
+  },
+  "bin": {
+    "neurodex": "bin/neurodex.js"
   }
 }
