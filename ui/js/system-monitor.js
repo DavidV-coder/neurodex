@@ -46,18 +46,75 @@ class SystemMonitor {
   }
 
   _subscribeGateway() {
-    // Listen for real-time metrics broadcasts from gateway
     gateway.addEventListener('event', e => {
       const d = e.detail;
       if (d?.type === 'system.metrics') this._applyMetrics(d.metrics);
     });
-    // Also listen for connected event to fetch initial snapshot
-    gateway.addEventListener('connected', () => this._fetchSnapshot());
+    gateway.addEventListener('connected', () => {
+      this._fetchSnapshot();
+      this._updateCliStatus();
+    });
   }
 
   start() {
-    // Try to fetch immediately if gateway is already connected
     this._fetchSnapshot();
+    this._updateCliStatus();
+    // Poll CLI status every 30s
+    setInterval(() => this._updateCliStatus(), 30000);
+  }
+
+  async _updateCliStatus() {
+    try {
+      const s = await gateway.call('claudecode.status').catch(() => null);
+      const dot = document.getElementById('cli-dot');
+      const txt = document.getElementById('cli-status-text');
+      const fill = document.getElementById('cli-plan-fill');
+      const info = document.getElementById('cli-plan-info');
+      const reset = document.getElementById('cli-reset-info');
+      if (!s) return;
+
+      if (s.available) {
+        if (dot) { dot.textContent = '●'; dot.style.color = 'var(--color-success,#00ff88)'; }
+        if (txt) txt.textContent = 'CONNECTED — Subscription';
+      } else {
+        if (dot) { dot.textContent = '○'; dot.style.color = 'var(--color-text-dim)'; }
+        if (txt) txt.textContent = 'NOT FOUND — install claude CLI';
+        return;
+      }
+
+      if (s.rateLimit) {
+        const r = s.rateLimit;
+        const allowed = r.status === 'allowed';
+        const overage = r.isUsingOverage;
+
+        if (fill) {
+          fill.style.background = overage ? 'rgba(255,176,0,0.5)' : allowed ? 'rgba(0,255,136,0.4)' : 'rgba(255,51,85,0.5)';
+          // We don't have exact usage % from CLI, show status bar state
+          fill.style.width = allowed ? (overage ? '75%' : '40%') : '100%';
+        }
+        if (info) {
+          const typeLabel = r.rateLimitType === 'five_hour' ? '5h window' : r.rateLimitType || 'plan';
+          info.textContent = allowed
+            ? `${typeLabel}: ${overage ? 'OVERAGE' : 'OK'}`
+            : `RATE LIMITED (${typeLabel})`;
+          info.style.color = allowed ? (overage ? 'var(--color-warn)' : 'inherit') : 'var(--color-danger,#ff3355)';
+        }
+        if (reset && r.resetsAt) {
+          const resetDate = new Date(r.resetsAt * 1000);
+          const diff = resetDate - Date.now();
+          if (diff > 0) {
+            const h = Math.floor(diff / 3600000);
+            const m = Math.floor((diff % 3600000) / 60000);
+            reset.textContent = `Resets in ${h}h ${m}m`;
+          } else {
+            reset.textContent = '';
+          }
+        }
+      } else {
+        if (info) info.textContent = 'Plan: awaiting first request';
+        if (fill) fill.style.width = '0%';
+      }
+    } catch { /* silent */ }
   }
 
   stop() {}

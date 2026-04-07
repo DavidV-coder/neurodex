@@ -536,6 +536,10 @@ export class GatewayServer {
       // ─── Claude Code CLI ─────────────────────────────────────────────────
       case 'claudecode.detect': return detectClaudeCliInfo();
       case 'claudecode.available': return { available: isClaudeCliAvailable() };
+      case 'claudecode.status': {
+        const { ClaudeCodeAdapter } = await import('../models/claudeCode.js');
+        return { available: isClaudeCliAvailable(), rateLimit: ClaudeCodeAdapter.getCliStatus() };
+      }
 
       default:
         throw new Error(`Method not found: ${request.method}`);
@@ -620,7 +624,7 @@ export class GatewayServer {
       iteration++;
 
       // Emit streaming start event
-      this.broadcastToClient(client.ws, {
+      this.broadcastEvent({
         type: 'chat.stream.start',
         sessionId: session.id,
         iteration
@@ -635,7 +639,7 @@ export class GatewayServer {
         maxTokens,
         stream: true,
         onChunk: (chunk: StreamChunk) => {
-          this.broadcastToClient(client.ws, {
+          this.broadcastEvent({
             type: 'chat.stream.chunk',
             sessionId: session.id,
             chunk
@@ -647,7 +651,7 @@ export class GatewayServer {
 
       // Broadcast token usage after each turn
       const msgCost = calculateCost(model, result.inputTokens ?? 0, result.outputTokens ?? 0);
-      this.broadcastToClient(client.ws, {
+      this.broadcastEvent({
         type: 'chat.tokens',
         sessionId: session.id,
         inputTokens:   result.inputTokens  ?? 0,
@@ -667,7 +671,7 @@ export class GatewayServer {
 
       // If no tool calls, we're done
       if (result.stopReason !== 'tool_use') {
-        this.broadcastToClient(client.ws, {
+        this.broadcastEvent({
           type: 'chat.stream.done',
           sessionId: session.id,
           result
@@ -680,7 +684,7 @@ export class GatewayServer {
       const toolResults: Message[] = [];
 
       for (const toolCall of toolCalls) {
-        this.broadcastToClient(client.ws, {
+        this.broadcastEvent({
           type: 'chat.tool.start',
           sessionId: session.id,
           tool: toolCall.name,
@@ -692,7 +696,7 @@ export class GatewayServer {
           (toolCall.input ?? {}) as Record<string, unknown>
         );
 
-        this.broadcastToClient(client.ws, {
+        this.broadcastEvent({
           type: 'chat.tool.done',
           sessionId: session.id,
           tool: toolCall.name,

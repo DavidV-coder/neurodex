@@ -47,11 +47,25 @@ export async function detectClaudeCliInfo(): Promise<{ available: boolean; versi
   });
 }
 
+export interface CliRateLimitInfo {
+  status: string;
+  resetsAt?: number;
+  rateLimitType?: string;
+  overageStatus?: string;
+  isUsingOverage?: boolean;
+  updatedAt: number;
+}
+
 export class ClaudeCodeAdapter implements ModelAdapter {
   private binary: string;
+  static _lastRateLimit: CliRateLimitInfo | null = null;
 
   constructor() {
     this.binary = findClaudeBinary() || 'claude';
+  }
+
+  static getCliStatus(): CliRateLimitInfo | null {
+    return ClaudeCodeAdapter._lastRateLimit;
   }
 
   async generate(options: GenerateOptions): Promise<GenerateResult> {
@@ -115,6 +129,20 @@ export class ClaudeCodeAdapter implements ModelAdapter {
             if (obj.type === 'result' && obj.subtype === 'success') {
               costUsd = obj.total_cost_usd || obj.cost_usd || 0;
               if (obj.result && !fullText) fullText = obj.result;
+              // Emit plan usage info for dashboard
+              if (obj.usage) onChunk({ type: 'text', text: '' }); // keep stream alive
+            }
+            if (obj.type === 'rate_limit_event' && obj.rate_limit_info) {
+              const info = obj.rate_limit_info;
+              // Store for retrieval via getCliStatus()
+              ClaudeCodeAdapter._lastRateLimit = {
+                status: info.status,
+                resetsAt: info.resetsAt,
+                rateLimitType: info.rateLimitType,
+                overageStatus: info.overageStatus,
+                isUsingOverage: info.isUsingOverage,
+                updatedAt: Date.now()
+              };
             }
           } catch { /* skip non-JSON lines */ }
         });

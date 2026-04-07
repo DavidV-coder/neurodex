@@ -91,6 +91,19 @@
         <div id="mole-output" class="mole-output hidden"></div>
       </div>
 
+      <!-- CLI Status -->
+      <div class="sysinfo-block" id="cli-status-block">
+        <div class="sysinfo-label">CLAUDE CLI
+          <span id="cli-dot" style="float:right;font-size:14px;line-height:1">○</span>
+        </div>
+        <div id="cli-status-text" class="sysinfo-value" style="font-size:9px">Checking...</div>
+        <div id="cli-plan-bar" class="progress-bar" style="margin-top:4px">
+          <div id="cli-plan-fill" class="progress-fill" style="background:rgba(0,255,136,0.4);width:0%"></div>
+        </div>
+        <div id="cli-plan-info" class="sysinfo-value" style="font-size:8px;opacity:0.7"></div>
+        <div id="cli-reset-info" class="sysinfo-value" style="font-size:8px;opacity:0.5"></div>
+      </div>
+
       <!-- AI Status -->
       <div class="sysinfo-block" id="ai-status-block">
         <div class="sysinfo-label">AI ENGINE</div>
