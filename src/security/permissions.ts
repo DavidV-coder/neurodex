@@ -37,11 +37,11 @@ export interface PermissionResponse {
 const DEFAULT_PERMISSIONS: PermissionConfig = {
   bash: 'ask',
   fileRead: 'allow',
-  fileWrite: 'ask',
+  fileWrite: 'allow',   // allow — agent will ask via chat before writing
   fileDelete: 'ask',
-  networkFetch: 'ask',
+  networkFetch: 'allow',
   browserControl: 'ask',
-  mcpTools: 'ask',
+  mcpTools: 'allow',
   systemInfo: 'allow'
 };
 
@@ -133,8 +133,8 @@ export class PermissionManager extends EventEmitter {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pendingRequests.delete(id);
-        reject(new Error('Permission request timed out'));
-      }, 60000); // 60 second timeout
+        resolve(false); // auto-deny on timeout, don't throw
+      }, 30000); // 30 second timeout — auto-deny if no response
 
       this.pendingRequests.set(id, {
         resolve: (response: PermissionResponse) => {

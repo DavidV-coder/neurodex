@@ -1,75 +1,93 @@
 /**
  * NeuroDEX — Main App Entry Point
- * Initializes all subsystems after gateway connects.
  */
 
 (async function() {
-  // Boot screen
+  // Boot screen — show immediately
   const bootScreen = document.createElement('div');
   bootScreen.className = 'boot-screen';
   bootScreen.innerHTML = `
     <div class="boot-logo">⬡</div>
-    <div class="boot-text">NEURODEX INITIALIZING</div>
+    <div class="boot-text">NEURODEX</div>
     <div class="boot-progress"><div class="boot-progress-fill"></div></div>
   `;
   document.body.appendChild(bootScreen);
+
+  // Remove boot screen after 1.5s regardless of anything else
+  setTimeout(() => {
+    bootScreen.style.transition = 'opacity 0.4s';
+    bootScreen.style.opacity = '0';
+    setTimeout(() => bootScreen.remove(), 400);
+  }, 1500);
 
   // Window controls
   document.getElementById('btn-minimize')?.addEventListener('click', () => window.NeuroDEX?.window.minimize());
   document.getElementById('btn-maximize')?.addEventListener('click', () => window.NeuroDEX?.window.maximize());
   document.getElementById('btn-close')?.addEventListener('click', () => window.NeuroDEX?.window.close());
   document.getElementById('btn-fullscreen')?.addEventListener('click', () => window.NeuroDEX?.window.fullscreen());
-
-  // F11 fullscreen
   document.addEventListener('keydown', (e) => {
     if (e.key === 'F11') { e.preventDefault(); window.NeuroDEX?.window.fullscreen(); }
+    if (e.ctrlKey && e.key === 'k') { e.preventDefault(); window.modelSelector?.show(); }
   });
 
-  // Wait for gateway token from Electron main
+  // ── Step 1: get gateway token (max 3s wait) ──────────────────────────────
   let gatewayToken = null;
   let gatewayPort = 18789;
 
   if (window.NeuroDEX?.gateway) {
-    await new Promise(resolve => {
-      window.NeuroDEX.gateway.onToken((data) => {
-        gatewayToken = data.token;
-        gatewayPort = data.port;
-        resolve();
-      });
-      // Timeout fallback for dev mode
-      setTimeout(resolve, 3000);
-    });
+    await Promise.race([
+      new Promise(resolve => {
+        window.NeuroDEX.gateway.onToken((data) => {
+          gatewayToken = data.token;
+          gatewayPort = data.port;
+          resolve();
+        });
+      }),
+      new Promise(resolve => setTimeout(resolve, 3000))
+    ]);
   }
 
-  // Connect to Gateway
-  try {
-    if (gatewayToken) {
-      await gateway.connect(gatewayPort, gatewayToken);
+  // ── Step 2: connect to gateway (max 4s, non-fatal) ───────────────────────
+  if (gatewayToken) {
+    try {
+      await Promise.race([
+        gateway.connect(gatewayPort, gatewayToken),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))
+      ]);
+    } catch (err) {
+      console.warn('[NeuroDEX] Gateway not ready yet:', err.message);
+      // UI still works — gateway will reconnect in background
     }
-  } catch (err) {
-    console.error('[NeuroDEX] Gateway connection failed:', err);
   }
 
-  // Initialize subsystems
+  // ── Step 3: init subsystems — all non-blocking ───────────────────────────
+
+  // System monitor — pure JS, no gateway needed
   window.systemMonitor = new SystemMonitor();
   window.systemMonitor.start();
 
+  // Agent console — just DOM setup, no async
   window.agentConsole = new AgentConsole();
 
+  // Terminal — init async but don't block
   window.terminal = new NeuroDEXTerminal();
-  await window.terminal.init();
+  window.terminal.init().catch(e => console.warn('[Terminal]', e));
 
+  // File browser — show cwd WITHOUT calling gateway (use IPC)
   window.fileBrowser = new FileBrowser();
-  await window.fileBrowser.refresh(process?.cwd?.() || '/');
+  const cwd = (await window.NeuroDEX?.system?.info().catch(() => null))?.cwd || '/';
+  window.fileBrowser.refreshLocal(cwd); // local read, no gateway
 
+  // Config panel — load keys from gateway async, don't block
   window.configPanel = new ConfigPanel();
-  await window.configPanel.load();
-  await window.configPanel.loadSkills();
+  window.configPanel.load().catch(() => {}); // non-blocking
+  window.configPanel.loadSkills().catch(() => {});
 
+  // Model selector — load async after gateway ready
   window.modelSelector = new ModelSelector();
-  await window.modelSelector.loadModels();
+  window.modelSelector.loadModels().catch(() => {});
 
-  // Right panel tab switching
+  // ── Step 4: UI events ────────────────────────────────────────────────────
   document.querySelectorAll('.panel-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.panel-tab-btn').forEach(b => b.classList.remove('active'));
@@ -81,35 +99,24 @@
     });
   });
 
-  // Gateway status indicator
   gateway.addEventListener('connected', () => {
-    document.getElementById('ai-provider').classList.replace('offline', 'online');
+    const badge = document.getElementById('ai-provider');
+    if (badge) { badge.classList.add('online'); badge.classList.remove('offline'); }
+    // Load models now that gateway is connected
+    window.modelSelector?.loadModels().catch(() => {});
+    window.configPanel?.load().catch(() => {});
   });
   gateway.addEventListener('disconnected', () => {
-    document.getElementById('ai-provider').textContent = 'RECONNECTING...';
+    const badge = document.getElementById('ai-provider');
+    if (badge) badge.textContent = 'RECONNECTING';
   });
 
-  // Remove boot screen
-  setTimeout(() => {
-    bootScreen.style.transition = 'opacity 0.5s';
-    bootScreen.style.opacity = '0';
-    setTimeout(() => bootScreen.remove(), 500);
-  }, 1500);
-
-  // Show welcome message
+  // Welcome message after UI is visible
   setTimeout(() => {
     window.agentConsole?._appendSystemMsg(
-      'NeuroDEX ready. Type a message or command to begin. Press Ctrl+K to select model.'
+      'NeuroDEX ready. Type a message to begin. Ctrl+K — select model. /help — list skills.'
     );
   }, 2000);
 
-  // Keyboard shortcut: Ctrl+K = model selector
-  document.addEventListener('keydown', (e) => {
-    if (e.ctrlKey && e.key === 'k') {
-      e.preventDefault();
-      window.modelSelector?.show();
-    }
-  });
-
-  console.log('[NeuroDEX] Initialization complete');
+  console.log('[NeuroDEX] Init complete');
 })();
