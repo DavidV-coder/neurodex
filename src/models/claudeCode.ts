@@ -102,82 +102,77 @@ export class ClaudeCodeAdapter implements ModelAdapter {
       let costUsd = 0;
       const contentBlocks: import('./index.js').ContentBlock[] = [];
 
-      if (stream && onChunk) {
-        const rl = readline.createInterface({ input: proc.stdout! });
-        rl.on('line', line => {
-          if (!line.trim()) return;
-          try {
-            const obj = JSON.parse(line);
-            // stream-json --verbose format: assistant message chunks
-            if (obj.type === 'assistant' && obj.message?.content) {
-              for (const block of obj.message.content) {
-                if (block.type === 'text' && block.text) {
-                  const newText = block.text.slice(fullText.length);
-                  if (newText) {
-                    fullText = block.text;
-                    onChunk({ type: 'text', text: newText });
-                  }
+      let stderr = '';
+      proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
+      proc.on('error', err => reject(new Error(`Claude CLI error: ${err.message}`)));
+
+      // Always use readline — wait for rl.close before resolving (proc.close fires too early)
+      const rl = readline.createInterface({ input: proc.stdout! });
+
+      rl.on('line', line => {
+        if (!line.trim()) return;
+        try {
+          const obj = JSON.parse(line);
+
+          // stream-json --verbose: assistant message with full text
+          if (obj.type === 'assistant' && obj.message?.content) {
+            for (const block of obj.message.content) {
+              if (block.type === 'text' && block.text) {
+                const newText = block.text.slice(fullText.length);
+                if (newText) {
+                  fullText = block.text;
+                  if (stream && onChunk) onChunk({ type: 'text', text: newText });
                 }
               }
             }
-            // Also handle classic content_block_delta (older CLI versions)
-            if (obj.type === 'content_block_delta' && obj.delta?.type === 'text_delta') {
-              const text = obj.delta.text || '';
-              fullText += text;
-              onChunk({ type: 'text', text });
-            }
-            if (obj.type === 'result' && obj.subtype === 'success') {
-              costUsd = obj.total_cost_usd || obj.cost_usd || 0;
-              if (obj.result && !fullText) fullText = obj.result;
-              // Emit plan usage info for dashboard
-              if (obj.usage) onChunk({ type: 'text', text: '' }); // keep stream alive
-            }
-            if (obj.type === 'rate_limit_event' && obj.rate_limit_info) {
-              const info = obj.rate_limit_info;
-              // Store for retrieval via getCliStatus()
-              ClaudeCodeAdapter._lastRateLimit = {
-                status: info.status,
-                resetsAt: info.resetsAt,
-                rateLimitType: info.rateLimitType,
-                overageStatus: info.overageStatus,
-                isUsingOverage: info.isUsingOverage,
-                updatedAt: Date.now()
-              };
-            }
-          } catch { /* skip non-JSON lines */ }
-        });
-      } else {
-        let buf = '';
-        proc.stdout?.on('data', (d: Buffer) => { buf += d.toString(); });
-        proc.on('close', () => {
-          try {
-            const obj = JSON.parse(buf);
-            fullText = obj.result || obj.content || buf;
-            costUsd = obj.cost_usd || 0;
-          } catch {
-            fullText = buf.trim();
           }
-        });
-      }
+          // Classic content_block_delta (older CLI versions)
+          if (obj.type === 'content_block_delta' && obj.delta?.type === 'text_delta') {
+            const text = obj.delta.text || '';
+            fullText += text;
+            if (stream && onChunk) onChunk({ type: 'text', text });
+          }
+          // Result — extract cost and fallback text
+          if (obj.type === 'result' && obj.subtype === 'success') {
+            costUsd = obj.total_cost_usd || obj.cost_usd || 0;
+            if (obj.result && !fullText) fullText = obj.result;
+          }
+          // Rate limit info — store for dashboard
+          if (obj.type === 'rate_limit_event' && obj.rate_limit_info) {
+            const info = obj.rate_limit_info;
+            ClaudeCodeAdapter._lastRateLimit = {
+              status: info.status,
+              resetsAt: info.resetsAt,
+              rateLimitType: info.rateLimitType,
+              overageStatus: info.overageStatus,
+              isUsingOverage: info.isUsingOverage,
+              updatedAt: Date.now()
+            };
+          }
+        } catch { /* skip non-JSON */ }
+      });
 
-      let stderr = '';
-      proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
-
-      proc.on('error', err => reject(new Error(`Claude CLI error: ${err.message}`)));
-      proc.on('close', code => {
-        if (code !== 0 && !fullText) {
-          return reject(new Error(`Claude CLI exited ${code}: ${stderr.slice(0, 500)}`));
+      // rl.close fires AFTER all lines are processed — safe to resolve here
+      rl.on('close', () => {
+        if (contentBlocks.length === 0 && fullText) {
+          contentBlocks.push({ type: 'text', text: fullText });
         }
-        if (fullText) contentBlocks.push({ type: 'text', text: fullText });
         onChunk?.({ type: 'done' });
         resolve({
           content: contentBlocks.length ? contentBlocks : [{ type: 'text', text: fullText }],
           stopReason: 'end_turn',
-          inputTokens: 0,  // CLI doesn't report token counts separately
+          inputTokens: 0,
           outputTokens: 0,
           model: 'claude-code',
           provider: 'claude-code'
         });
+      });
+
+      proc.on('close', code => {
+        if (code !== 0 && !fullText && stderr) {
+          // rl.close may not fire on error — reject here as fallback
+          reject(new Error(`Claude CLI exited ${code}: ${stderr.slice(0, 500)}`));
+        }
       });
     });
   }
