@@ -93,7 +93,7 @@ export class OllamaAdapter implements ModelAdapter {
       };
     }
 
-    const data: OllamaChatResponse = await response.json();
+    const data = await response.json() as OllamaChatResponse;
     return {
       content: [{ type: 'text', text: data.message.content }],
       inputTokens: data.prompt_eval_count ?? 0,

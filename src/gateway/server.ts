@@ -8,11 +8,11 @@ import { WebSocketServer, WebSocket } from 'ws';
 import * as http from 'http';
 import * as crypto from 'crypto';
 import { sessionManager } from '../sessions/manager.js';
-import { getAdapter } from '../models/registry.js';
+import { getAdapter, getAvailableProviders } from '../models/registry.js';
 import { executeTool, getToolDefinitions } from '../tools/index.js';
 import { permissionManager } from '../security/permissions.js';
 import { setApiKey, getApiKey, listProviders, deleteApiKey } from '../security/keyVault.js';
-import { getAvailableProviders, MODELS } from '../models/index.js';
+import { MODELS } from '../models/index.js';
 import type { Message, GenerateResult, StreamChunk, ModelProvider } from '../models/index.js';
 
 export interface GatewayConfig {
@@ -66,7 +66,7 @@ export class GatewayServer {
       this.wss = new WebSocketServer({
         server: this.httpServer,
         // Only allow localhost connections
-        verifyClient: (info) => {
+        verifyClient: (info: { req: http.IncomingMessage }) => {
           const origin = info.req.socket.remoteAddress;
           return origin === '127.0.0.1' || origin === '::1' || origin === '::ffff:127.0.0.1';
         }

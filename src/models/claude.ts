@@ -34,8 +34,8 @@ export class ClaudeAdapter implements ModelAdapter {
       input_schema: t.parameters as Anthropic.Tool['input_schema']
     }));
 
-    const thinkingConfig = thinking
-      ? [{ type: 'thinking' as const, budget_tokens: thinkingBudget }]
+    const thinkingConfig: Anthropic.ThinkingConfigEnabled | undefined = thinking
+      ? { type: 'enabled', budget_tokens: thinkingBudget }
       : undefined;
 
     const requestParams: Anthropic.MessageCreateParamsNonStreaming = {
@@ -44,7 +44,7 @@ export class ClaudeAdapter implements ModelAdapter {
       messages: anthropicMessages as Anthropic.MessageParam[],
       ...(systemPrompt && { system: systemPrompt }),
       ...(anthropicTools?.length && { tools: anthropicTools }),
-      ...(thinkingConfig && { thinking: thinkingConfig[0] }),
+      ...(thinkingConfig && { thinking: thinkingConfig }),
       ...(temperature !== 1 && !thinking && { temperature })
     };
 

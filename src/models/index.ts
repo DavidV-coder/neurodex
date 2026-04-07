@@ -109,3 +109,8 @@ export function getModelConfig(provider: ModelProvider, model: string): ModelCon
 export function getModelsByProvider(provider: ModelProvider): ModelConfig[] {
   return MODELS.filter(m => m.provider === provider);
 }
+
+export async function getAvailableProviders(): Promise<ModelProvider[]> {
+  const { getAvailableProviders: _get } = await import('./registry.js');
+  return _get();
+}
