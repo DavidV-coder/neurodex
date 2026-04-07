@@ -40,8 +40,8 @@ Be concise, precise, and helpful. When working with code, always read files befo
 Current date: ${new Date().toISOString().split('T')[0]}`;
 
 export const DEFAULT_SESSION_CONFIG: SessionConfig = {
-  provider: 'claude',
-  model: 'claude-sonnet-4-6',
+  provider: 'claude-code',
+  model: 'claude-code-sonnet',
   systemPrompt: DEFAULT_SYSTEM_PROMPT,
   thinking: false,
   thinkingBudget: 10000,
