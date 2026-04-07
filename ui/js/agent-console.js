@@ -353,7 +353,8 @@ class AgentConsole {
 
   _renderMarkdown(text) {
     if (window.marked) {
-      return marked.parse(text, { breaks: true, gfm: true });
+      const parseFn = typeof marked.parse === 'function' ? marked.parse : (typeof marked === 'function' ? marked : null);
+      if (parseFn) return parseFn(text, { breaks: true, gfm: true });
     }
     return this._escapeHtml(text).replace(/\n/g, '<br>');
   }

@@ -1,0 +1,15 @@
+/* NeuroDEX Tron Theme */
+:root {
+  --color-bg: #000a0f;
+  --color-bg2: #001520;
+  --color-primary: #00e5ff;
+  --color-accent: #00e5ff;
+  --color-text: #c0e8f0;
+  --color-text-dim: rgba(192,232,240,0.45);
+  --color-border: rgba(0,229,255,0.18);
+  --color-success: #00ff88;
+  --color-warn: #ffb000;
+  --color-danger: #ff3355;
+  --color-warn-dim: rgba(255,176,0,0.3);
+  --color-error: #ff3355;
+}
