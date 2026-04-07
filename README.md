@@ -1,122 +1,217 @@
 # ⬡ NeuroDEX
 
-**Sci-fi AI Terminal** — Full-featured AI CLI terminal with multi-model support, built on eDEX-UI aesthetic.
+**NeuroDEX** — sci-fi AI terminal for macOS. A full-featured alternative to OpenClaw, built with an eDEX-UI inspired interface. Works with Claude Code CLI subscription (no API key needed) and all major AI providers.
 
-![NeuroDEX Screenshot](docs/screenshot.png)
+> **If OpenClaw stopped working for you — NeuroDEX is a drop-in replacement.**
 
-## Features
+---
 
-### AI Models
-| Provider | Models | Tools | Vision | Thinking |
-|----------|--------|-------|--------|----------|
-| Claude | Opus 4.6, Sonnet 4.6, Haiku 4.5 | ✓ | ✓ | ✓ |
-| OpenAI | GPT-4o, o1, o3-mini | ✓ | ✓ | ✓ |
-| Gemini | 2.0 Flash, 2.0 Pro | ✓ | ✓ | - |
-| DeepSeek | V3, R1 (Reasoning) | ✓ | - | ✓ |
-| Mistral | Large, Codestral | ✓ | - | - |
-| Ollama | Any local model | ✓ | - | - |
+## ✨ Features
 
-### Tools Available to AI
-- **Bash** — Execute shell commands (with permission system)
-- **Read/Write/Edit** — File operations
-- **Glob/Grep** — Code search
-- **WebFetch** — Fetch web pages
-- **TodoWrite** — Task management
+### 🔗 AI Connections
+- **Claude Code CLI** — use your Claude.ai subscription directly, **no API key needed**
+- **Multi-model** — Claude API, OpenAI, Gemini, DeepSeek, Mistral, Ollama (local)
+- Automatic provider detection on startup
+- Token usage and cost tracking per session
 
-### Security
-- API keys stored in OS Keychain (macOS Keychain / Windows Credential Manager)
-- AES-256-GCM fallback encryption for keys
-- Path sandboxing — restricts file access to allowed directories
-- Permission system — `allow/ask/deny` per tool category
-- Dangerous command detection (prevents `rm -rf /`, etc.)
-- Localhost-only Gateway (no external access without explicit config)
-- Content Security Policy in Electron renderer
+### 💻 Interface
+- eDEX-UI inspired sci-fi terminal aesthetic
+- Real-time system monitor (CPU cores, RAM, Disk, Network KB/s, Processes)
+- Split layout: system panel / AI chat / file browser + terminal
+- Boot screen with live connection diagnostics
+- Fullscreen support, frameless window
 
-### UI
-- Sci-fi terminal aesthetic (inspired by eDEX-UI / TRON Legacy)
-- Real-time system monitoring (CPU, RAM, Network)
-- Multi-tab terminal (xterm.js)
-- Streaming AI responses with tool execution display
-- Permission dialog for sensitive operations
-- 5 built-in themes: TRON, MATRIX, AMBER, VIOLET, RED ALERT
-- File browser with AI context integration
+### 🤖 AI Agent Features
+- Full agentic loop with tool use (Bash, Read, Write, Edit, Glob, Grep, Browser, Web)
+- 35+ built-in slash commands (`/help`, `/commit`, `/review`, `/debug`, etc.)
+- Background agents running in parallel
+- Project memory (auto-recalls context per working directory)
+- MCP (Model Context Protocol) server support
+- Pre/post tool execution hooks
 
-## Quick Start
+### 🛠️ System Tools
+- Integrated PTY terminal (real bash/zsh shell)
+- File browser with directory navigation
+- **Mole integration** (tw93/mole) — Mac system health: ANALYZE / CLEAN / OPTIMIZE / PURGE
+- System health dashboard with live metrics
+- Process monitor (top 8 by CPU, updates every 2s)
+
+### 🔒 Security
+- OS Keychain for API keys (macOS Keychain / AES-256-GCM fallback)
+- Permission system per tool category (allow / ask / deny)
+- Sandboxed Electron with contextIsolation
+- WebSocket gateway with auth token
+
+---
+
+## 🚀 Quick Start
+
+### 1. Install Claude Code CLI (recommended — no API key needed)
 
 ```bash
-# Clone
-git clone https://github.com/DavidV-coder/neurodex
+npm install -g @anthropic-ai/claude-code
+claude login
+```
+
+### 2. Clone and run NeuroDEX
+
+```bash
+git clone https://github.com/DavidV-coder/neurodex.git
 cd neurodex
-
-# Setup (installs deps + configures API keys)
-npm run setup
-
-# Run
-npm run dev
-
-# Build
-npm run build:mac   # macOS DMG
-npm run build:linux # AppImage
-npm run build:win   # Windows NSIS
+npm install
+npm run build:ts
+npm start
 ```
 
-## Configuration
+### 3. First launch
 
-Settings stored in `~/.config/NeuroDEX/`
+The boot screen checks all connections automatically:
 
 ```
-~/.config/NeuroDEX/
-├── settings.json    # App settings
-├── vault.enc        # Encrypted API keys (fallback)
-├── gateway.token    # Runtime gateway token (auto-generated)
-└── sessions/        # Conversation history
+[INIT] NeuroDEX v1.0.0
+[GATEWAY] Connecting to local gateway... OK
+[CLI] Detecting Claude Code CLI... FOUND (v2.1.92)
+[MODEL] Default: Claude Sonnet (Subscription)
+[READY] All systems operational
 ```
 
-## Keyboard Shortcuts
+Claude Code CLI is selected automatically — no further setup needed.
+
+---
+
+## ⚙️ Configuration
+
+### Claude Code CLI (recommended)
+```bash
+npm install -g @anthropic-ai/claude-code
+claude login      # opens browser → log in with claude.ai account
+claude --version  # verify
+```
+
+In NeuroDEX: `Ctrl+K` → **Claude Sonnet (Subscription)** or **Claude Opus (Subscription)**
+
+### API Keys (optional)
+`Ctrl+,` → **API KEYS** tab → paste your key:
+
+| Provider | Key format |
+|----------|-----------|
+| Claude (Anthropic) | `sk-ant-...` |
+| OpenAI | `sk-...` |
+| Gemini | `AIza...` |
+| DeepSeek | `sk-...` |
+| Mistral | `...` |
+
+Keys stored in macOS Keychain.
+
+### Local Models (Ollama)
+```bash
+brew install ollama
+ollama pull llama3.3   # or qwen2.5-coder, codestral, etc.
+# NeuroDEX auto-detects at localhost:11434
+```
+
+---
+
+## ⌨️ Keyboard Shortcuts
 
 | Shortcut | Action |
 |----------|--------|
+| `Ctrl+K` | Select model |
+| `Ctrl+,` | Open settings |
+| `Ctrl+L` | Clear chat |
+| `Ctrl+N` | New session |
+| `Ctrl+B` | Background agents |
+| `Ctrl+M` | Project memory |
+| `F11` | Fullscreen |
 | `Enter` | Send message |
-| `Shift+Enter` | Newline in input |
-| `Ctrl+K` | Open model selector |
-| `F11` | Toggle fullscreen |
+| `Shift+Enter` | New line |
+| `/help` | List all skills |
 
-## Architecture
+---
+
+## 🛠️ Built-in Slash Commands
 
 ```
-NeuroDEX
-├── Electron (Main Process)
-│   ├── BrowserWindow — frameless, sci-fi UI
-│   ├── Gateway lifecycle management
-│   └── Secure IPC bridge (preload)
-├── Gateway Server (Node.js WebSocket)
-│   ├── JSON-RPC 2.0 protocol
-│   ├── Session management
-│   ├── Agentic loop (tool calls → model → tools → model...)
-│   └── Permission bridge → UI
-├── Model Registry
-│   ├── Claude (Anthropic SDK)
-│   ├── OpenAI (OpenAI SDK)
-│   ├── Gemini (@google/generative-ai)
-│   ├── DeepSeek (OpenAI-compatible)
-│   ├── Mistral (OpenAI-compatible)
-│   └── Ollama (REST API)
-├── Tool System
-│   ├── Bash, Read, Write, Edit, Glob, Grep
-│   ├── WebFetch, TodoWrite
-│   └── [MCP support coming]
-├── Security Layer
-│   ├── KeyVault (OS Keychain + AES-256-GCM fallback)
-│   ├── Sandbox (path restrictions)
-│   └── PermissionManager (approve/deny/remember)
-└── UI (eDEX-inspired)
-    ├── Agent Console (streaming chat + tool display)
-    ├── Terminal (xterm.js, multi-tab)
-    ├── System Monitor (CPU/RAM/Network)
-    ├── File Browser
-    └── Config Panel
+/help         list all skills
+/commit       AI-generated git commit message
+/review       code review
+/debug        debug assistant
+/test         run tests
+/explain      explain selected code
+/refactor     refactor code
+/docs         generate documentation
+/search       web search
+/summarize    summarize content
+/translate    translate text
+/agents       list/manage background agents
+/memory       project memory operations
+/mole         system maintenance (clean/analyze/optimize)
++ 20 more...
 ```
 
-## License
+---
 
-MIT — See [LICENSE](LICENSE)
+## 🆚 NeuroDEX vs OpenClaw
+
+| Feature | OpenClaw | NeuroDEX |
+|---------|----------|----------|
+| Claude Code CLI (subscription) | ✅ | ✅ |
+| Multi-model support | ❌ | ✅ 6 providers |
+| Local models (Ollama) | ❌ | ✅ |
+| Background agents | ✅ | ✅ |
+| Real-time system monitor | ❌ | ✅ |
+| PTY Terminal | ✅ | ✅ |
+| MCP server support | ✅ | ✅ |
+| Telegram integration | ❌ | ✅ |
+| System maintenance (Mole) | ❌ | ✅ |
+| Open source | ❌ | ✅ MIT |
+
+---
+
+## 🏗️ Architecture
+
+```
+neurodex/
+├── electron/           Electron main process + preload
+├── src/
+│   ├── gateway/        WebSocket JSON-RPC 2.0 server (port 18789)
+│   ├── models/         AI adapters
+│   │   ├── claudeCode.ts   Claude Code CLI (subscription)
+│   │   ├── claude.ts       Anthropic SDK
+│   │   ├── openai.ts       OpenAI SDK
+│   │   ├── gemini.ts       Google Gemini
+│   │   ├── deepseek.ts     DeepSeek
+│   │   └── ollama.ts       Ollama REST
+│   ├── tools/          AI tools (Bash, Read, Write, Browser, Mole...)
+│   ├── agents/         Background agent runner
+│   ├── sessions/       Session management + compaction
+│   ├── skills/         Slash command registry (35+ skills)
+│   ├── memory/         Project memory (JSON store)
+│   ├── mcp/            MCP stdio client
+│   ├── hooks/          Pre/post hooks system
+│   ├── security/       Permissions + OS keychain
+│   └── telemetry/      Live system metrics (systeminformation)
+└── ui/                 Frontend — vanilla JS + xterm.js
+```
+
+### How Claude Code CLI subscription works
+
+NeuroDEX runs `claude --print --output-format stream-json --verbose` as a subprocess and parses the NDJSON stream. Uses your Claude.ai subscription — same billing as regular Claude Code, zero additional API key required.
+
+---
+
+## 📋 Requirements
+
+- **macOS 12+** (Apple Silicon M1/M2/M3 or Intel)
+- **Node.js 18+**
+- **Claude Code CLI** `npm install -g @anthropic-ai/claude-code` — OR any API key
+
+---
+
+## 📄 License
+
+MIT — free to use, modify, distribute.
+
+---
+
+**Built for the community. If OpenClaw stopped working — NeuroDEX has you covered. ⬡**
