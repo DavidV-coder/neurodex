@@ -189,6 +189,8 @@ class AgentConsole {
   }
 
   _handleChunk(chunk) {
+    if (chunk.type === 'done') { this._onStreamDone(); return; }
+    if (chunk.type === 'error') { this._appendError(chunk.error || 'Stream error'); this._onStreamDone(); return; }
     if (!this.streamingEl) return;
     const bubble = this.streamingEl.querySelector('.msg-bubble');
 
