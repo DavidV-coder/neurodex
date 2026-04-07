@@ -71,8 +71,16 @@ export class ClaudeCodeAdapter implements ModelAdapter {
   async generate(options: GenerateOptions): Promise<GenerateResult> {
     const { messages, systemPrompt, maxTokens, stream, onChunk } = options;
 
-    // Build the prompt from messages
-    const prompt = this._buildPrompt(messages);
+    // Build prompt — send only last user message, pass history via system prompt
+    const { prompt, history } = this._buildPrompt(messages);
+
+    // Combine system prompt + conversation history
+    let fullSystemPrompt = systemPrompt || '';
+    if (history) {
+      fullSystemPrompt = fullSystemPrompt
+        ? `${fullSystemPrompt}\n\n--- Conversation history ---\n${history}`
+        : `--- Conversation history ---\n${history}`;
+    }
 
     const args: string[] = [
       '--print',
@@ -81,14 +89,11 @@ export class ClaudeCodeAdapter implements ModelAdapter {
       '--dangerously-skip-permissions',
     ];
 
-    if (systemPrompt) {
-      args.push('--system-prompt', systemPrompt);
-    }
-    if (maxTokens) {
-      args.push('--max-budget-usd', String(maxTokens / 1000)); // rough budget estimate
+    if (fullSystemPrompt) {
+      args.push('--system-prompt', fullSystemPrompt);
     }
 
-    // Append the prompt as last argument
+    // Prompt as last argument
     args.push(prompt);
 
     return new Promise((resolve, reject) => {
@@ -185,18 +190,21 @@ export class ClaudeCodeAdapter implements ModelAdapter {
     return isClaudeCliAvailable();
   }
 
-  private _buildPrompt(messages: import('./index.js').Message[]): string {
-    // For multi-turn, serialize as a conversation
-    if (messages.length === 1) {
-      const m = messages[0];
-      return typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
-    }
-    return messages
-      .filter(m => m.role !== 'system')
-      .map(m => {
-        const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
-        return `${m.role === 'user' ? 'Human' : 'Assistant'}: ${content}`;
-      })
-      .join('\n\n') + '\n\nAssistant:';
+  private _buildPrompt(messages: import('./index.js').Message[]): { prompt: string; history: string } {
+    const nonSystem = messages.filter(m => m.role !== 'system');
+    // Last user message is the actual prompt
+    const lastUser = [...nonSystem].reverse().find(m => m.role === 'user');
+    const prompt = lastUser
+      ? (typeof lastUser.content === 'string' ? lastUser.content : JSON.stringify(lastUser.content))
+      : '';
+
+    // Build conversation history for context (everything before last user message)
+    const history = nonSystem.slice(0, -1).map(m => {
+      const role = m.role === 'user' ? 'User' : 'Assistant';
+      const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+      return `${role}: ${content}`;
+    }).join('\n\n');
+
+    return { prompt, history };
   }
 }
