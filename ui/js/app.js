@@ -39,7 +39,7 @@
   bootLine('[SYS] Checking system...');
   await wait(180);
 
-  // ── Step 1: get gateway token (max 3s wait) ──────────────────────────────
+  // ── Step 1: get gateway token (cached in preload, max 6s wait) ──────────
   let gatewayToken = null;
   let gatewayPort  = 18789;
 
@@ -52,7 +52,7 @@
           resolve();
         });
       }),
-      new Promise(resolve => setTimeout(resolve, 3000))
+      new Promise(resolve => setTimeout(resolve, 6000))
     ]);
   }
 
@@ -64,7 +64,7 @@
     try {
       await Promise.race([
         gateway.connect(gatewayPort, gatewayToken),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
       ]);
       gatewayOk = true;
       gwLine.textContent = '[GATEWAY] Connecting to local gateway... OK';

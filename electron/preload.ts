@@ -5,6 +5,16 @@
 
 import { contextBridge, ipcRenderer } from 'electron';
 
+// Cache token immediately — may arrive before app.js registers the listener
+let _cachedToken: { token: string; port: number } | null = null;
+let _tokenCallbacks: Array<(data: { token: string; port: number }) => void> = [];
+
+ipcRenderer.on('gateway:token', (_, data: { token: string; port: number }) => {
+  _cachedToken = data;
+  _tokenCallbacks.forEach(cb => cb(data));
+  _tokenCallbacks = [];
+});
+
 contextBridge.exposeInMainWorld('NeuroDEX', {
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),
@@ -15,7 +25,10 @@ contextBridge.exposeInMainWorld('NeuroDEX', {
 
   gateway: {
     onToken: (callback: (data: { token: string; port: number }) => void) => {
-      ipcRenderer.once('gateway:token', (_, data) => callback(data));
+      // If token already arrived — deliver immediately
+      if (_cachedToken) { callback(_cachedToken); return; }
+      // Otherwise queue for when it arrives
+      _tokenCallbacks.push(callback);
     }
   },
 
