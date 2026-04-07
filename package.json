@@ -19,7 +19,7 @@
     "lint": "eslint src electron --ext .ts,.js",
     "test": "vitest run",
     "setup": "node scripts/setup.js",
-    "postinstall": "echo 'Run: npm run setup'",
+    "postinstall": "node -e \"require(\"@electron/rebuild\").rebuild({buildPath:process.cwd(),electronVersion:require(\"./node_modules/electron/package.json\").version,onlyModules:[\"better-sqlite3\",\"node-pty\",\"bufferutil\",\"keytar\"]}).catch(()=>{})\"",
     "cli": "tsx src/cli/index.ts",
     "build:cli": "tsc -p tsconfig.cli.json"
   },
