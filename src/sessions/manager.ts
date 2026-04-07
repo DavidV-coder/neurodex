@@ -92,13 +92,19 @@ export class SessionManager {
 
   getOrCreateMain(): Session {
     const mainPath = path.join(SESSIONS_DIR, 'main.json');
+    // Return from cache if already loaded
+    if (this.activeSessions.has('main')) return this.activeSessions.get('main')!;
     try {
       const raw = fs.readFileSync(mainPath, 'utf8');
       const session: Session = JSON.parse(raw);
-      this.activeSessions.set(session.id, session);
+      // Always force id to 'main' so frontend sessionId filter works
+      session.id = 'main';
+      this.activeSessions.set('main', session);
       return session;
     } catch {
       const session = this.createSession('main');
+      session.id = 'main';
+      this.activeSessions.set('main', session);
       fs.writeFileSync(mainPath, JSON.stringify(session, null, 2));
       return session;
     }
