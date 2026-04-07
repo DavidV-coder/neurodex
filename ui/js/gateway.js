@@ -119,10 +119,23 @@ class GatewayClient extends EventTarget {
     });
   }
 
-  // Public call — checks connection first
+  // Wait until connected (or timeout)
+  waitForConnection(timeoutMs = 8000) {
+    if (this.connected) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.removeEventListener('connected', onConnect);
+        reject(new Error('Gateway not connected'));
+      }, timeoutMs);
+      const onConnect = () => { clearTimeout(timer); resolve(); };
+      this.addEventListener('connected', onConnect, { once: true });
+    });
+  }
+
+  // Public call — waits for connection, then sends
   call(method, params = {}) {
     if (!this.connected || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      return Promise.reject(new Error('Gateway not connected'));
+      return this.waitForConnection(6000).then(() => this.call(method, params));
     }
     return new Promise((resolve, reject) => {
       const id = ++this._msgId;
